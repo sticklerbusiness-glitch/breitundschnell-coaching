@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Training — Breit & Schnell</title>
+<meta name="description" content="Trainingspläne, Workouts und Fortschritt für Mitglieder von Breit &amp; Schnell.">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Breit&Schnell">
+<!-- B&S: the WEBSITE's manifest (absolute path, outside the Vite base). Training is one
+     screen of one installed app that starts at /app — a manifest of its own would make
+     "zum Home-Bildschirm" install a second, competing icon. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<!-- B&S: Icon-Pfade ABSOLUT (Vite ersetzt %BASE_URL% durch die Base /training/). Die Seite
+     wird unter /training OHNE Schrägstrich ausgeliefert — Next leitet jeden Pfad mit
+     Schrägstrich am Ende per 308 dorthin um —, ein relatives "icon-180.png" würde dort
+     gegen den Domain-Stamm aufgelöst (/icon-180.png, 404) und „Zum Home-Bildschirm"
+     bekäme auf iOS einen Screenshot statt des Icons. -->
+<link rel="apple-touch-icon" href="%BASE_URL%icon-180.png">
+<link rel="icon" type="image/png" href="%BASE_URL%icon-192.png">
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

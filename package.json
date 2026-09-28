@@ -1,0 +1,21 @@
+{
+  "name": "breitundschnell-coaching",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Trainings-App von Breit & Schnell (Fork von openGym) — Serverless-API unter api/, SPA unter frontend/",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "test": "vitest run --dir lib"
+  },
+  "dependencies": {
+    "jose": "^6.2.12",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
+  }
+}
