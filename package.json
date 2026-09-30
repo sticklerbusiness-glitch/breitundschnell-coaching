@@ -9,7 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "test": "vitest run --dir lib"
+    "test": "vitest run"
   },
   "dependencies": {
     "jose": "^6.2.12",

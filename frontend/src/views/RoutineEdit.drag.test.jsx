@@ -12,7 +12,8 @@ const sheets = vi.hoisted(() => ({
 // the read-only view. Mocked rather than set on the store so localStorage persistence (which
 // the editor mode deliberately bypasses) still behaves as it does for a member.
 vi.mock('../lib/editor-mode.js', () => ({
-  usePlanEditable: () => true, planEditable: () => true, readEditorParam: () => null,
+  usePlanEditable: () => true, planEditable: () => true,
+  useEditorMode: () => true, editorMode: () => true, readEditorParam: () => null,
 }))
 vi.mock('../lib/api.js', () => ({ api: vi.fn(() => Promise.resolve({})) }))
 vi.mock('../sheets.jsx', () => sheets)

@@ -1,6 +1,6 @@
 import { json, methodNotAllowed, notFound, fail, query } from '../../lib/http.js';
 import { requireSession, requireOrigin, isUserId } from '../../lib/guard.js';
-import { isCoach } from '../../lib/session.js';
+import { isCoach, planGehoertDemCoach } from '../../lib/session.js';
 import { readJson, LIMITS } from '../../lib/body.js';
 import { validatePlan, samePlan, planRev, withoutPlanRev } from '../../lib/plan.js';
 import { coachOwnedCustomEx, planPayload } from '../../lib/state.js';
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     const target = query(req).get('user');
     if (!isUserId(target)) return notFound(res);
     const member = await findUser(ctx.sql, target);
-    if (!member || member.rolle !== 'TEILNEHMER') return notFound(res);
+    if (!member || !planGehoertDemCoach(member)) return notFound(res);
 
     const body = await readJson(req, LIMITS.plan);
     const checked = validatePlan(body);
@@ -33,14 +33,32 @@ export default async function handler(req, res) {
     // B&S: Was dem Mitglied gehört, bleibt dem Mitglied — der Editor schickt
     // alle eigenen Übungen zurück, die in einer Routine vorkommen, auch die des
     // Mitglieds (siehe coachOwnedCustomEx).
-    const plan = { ...checked.plan, customEx: coachOwnedCustomEx(checked.plan.customEx, row) };
+    const eigene = coachOwnedCustomEx(checked.plan.customEx, row);
+    const plan = { ...checked.plan, customEx: eigene };
+
+    // B&S: … und die Regel sagt, was sie verworfen hat. Sonst zeigt der Editor
+    // die Korrektur des Coaches an einer mitgliedseigenen Übung weiter, bis er
+    // neu lädt — dann ist sie weg, ohne dass irgendwo etwas stand, und der Coach
+    // macht es wahrscheinlich ein zweites Mal.
+    const behalten = new Set(eigene);
+    const fremdeUebungen = checked.plan.customEx
+      .filter(e => !behalten.has(e))
+      .map(e => e?.id)
+      .filter(id => typeof id === 'string');
+    /** Antwort an den Editor — Hinweise nur, wenn es welche gibt. */
+    const antwort = rev => {
+      const body = { ok: true, rev };
+      if (checked.gekuerzt) body.gekuerzt = checked.gekuerzt;
+      if (fremdeUebungen.length) body.fremdeUebungen = fremdeUebungen;
+      return body;
+    };
 
     // B&S: Unveränderter Plan → gar nicht schreiben. Sonst zählt jede der vielen
     // Speicherungen einer Editor-Sitzung rev hoch und schickt jedes Gerät des
     // Mitglieds zum Nachladen des kompletten Dokuments (checkRev alle 30 s).
     // Steht auf dem Server schon genau dieser Plan, gibt es auch nichts zu
     // streiten — dann ist selbst ein alter baseRev kein Konflikt.
-    if (row && samePlan(withoutPlanRev(row.plan), plan)) return json(res, 200, { ok: true, rev: curPlanRev });
+    if (row && samePlan(withoutPlanRev(row.plan), plan)) return json(res, 200, antwort(curPlanRev));
 
     // B&S: Beide Coaches sehen alle Mitglieder, und ein Editor-Tab lädt nie
     // nach. Schickt er die Revision mit, die er geladen hat, und passt sie
@@ -55,13 +73,25 @@ export default async function handler(req, res) {
     // Geschrieben wird gegen die Zeilenrevision (die sich auch durch das
     // Mitglied bewegt) — das schützt das Rennen zwischen Lesen und Schreiben.
     const stored = { ...plan, planRev: curPlanRev + 1 };
-    const rev = hasBase
+    let rev = hasBase
       ? await savePlanAt(ctx.sql, member.id, stored, curRev)
       : await savePlan(ctx.sql, member.id, stored);
-    // null: zwischen Lesen und Schreiben war jemand schneller — dieselbe Antwort.
-    if (rev == null) return conflict(res, await getStand(ctx.sql, member.id));
+    if (rev == null) {
+      // B&S: null heißt nur „die Zeilenrevision ist nicht mehr die gelesene" —
+      // und die zählt auch hoch, wenn das MITGLIED gerade einen Satz loggt. Das
+      // wäre kein Konflikt am Plan, der Editor würde aber „ein anderer Coach hat
+      // den Plan geändert" zeigen und die Arbeit des Coaches verwerfen. Also
+      // einmal nachsehen: steht der Plan noch auf demselben Stand, war es das
+      // Mitglied — dann mit der neuen Zeilenrevision wiederholen. Genau EIN
+      // zweiter Versuch, damit daraus keine Schleife wird.
+      const frisch = await getStand(ctx.sql, member.id);
+      if (hasBase && planRev(frisch?.plan) === curPlanRev) {
+        rev = await savePlanAt(ctx.sql, member.id, stored, frisch ? frisch.rev : 0);
+      }
+      if (rev == null) return conflict(res, frisch);
+    }
 
-    json(res, 200, { ok: true, rev: curPlanRev + 1 });
+    json(res, 200, antwort(curPlanRev + 1));
   } catch (err) {
     fail(res, err);
   }

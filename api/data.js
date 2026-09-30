@@ -1,5 +1,6 @@
 import { json, methodNotAllowed, fail } from '../lib/http.js';
 import { requireSession, requireOrigin } from '../lib/guard.js';
+import { planGehoertDemCoach } from '../lib/session.js';
 import { readJson, LIMITS } from '../lib/body.js';
 import { compose, strip, planPayload, isPlainObject } from '../lib/state.js';
 import { getStand, updateDaten, insertStand } from '../lib/repo.js';
@@ -19,7 +20,11 @@ export default async function handler(req, res) {
 // ihrem eigenen Dokument. Ohne das hat der Server routines/week aus jedem PUT
 // eines Coaches gelöscht und mit dem (immer leeren) Coach-Plan geantwortet —
 // der Client hat das übernommen und die eigene Routine war still weg.
-const selfOwnedPlan = user => user?.rolle === 'COACH';
+// Gefragt wird über die Gegenseite (lib/session.js planGehoertDemCoach): nur wem
+// ein Coach einen Plan schreibt, dem löscht der Server routines/week aus dem
+// eigenen Push. Alles andere — COACH und jede Rolle, die noch dazukommt —
+// besitzt seinen Plan selbst, statt ihn zwischen zwei Prüfungen zu verlieren.
+const selfOwnedPlan = user => !planGehoertDemCoach(user);
 
 async function read(req, res) {
   const ctx = await requireSession(req, res);
@@ -51,6 +56,12 @@ async function write(req, res) {
   if (body.baseRev != null && body.baseRev !== curRev) return conflict(res, row, selfOwned);
 
   const plan = isPlainObject(row?.plan) ? row.plan : {};
+  // B&S: Liegt in der Mitglieds-Hälfte ein Plan, obwohl diese Person kein Coach
+  // (mehr) ist, ist die Rolle zurückgestellt worden. strip() lässt ihn dann
+  // stehen, statt ihn zu löschen — hier steht, warum er im Dokument nicht auftaucht.
+  if (!selfOwned && Array.isArray(row?.daten?.routines) && row.daten.routines.length) {
+    console.warn('[gym-api] Plan liegt in daten, Rolle ist nicht COACH — bleibt erhalten, sichtbar erst wieder als COACH:', ctx.user.id);
+  }
   // B&S: prevDaten — nur so weiß strip(), welche eigene Übung dem Mitglied schon
   // vorher gehörte und darum nicht als Coach-Kopie gelöscht werden darf.
   const daten = strip(state, plan, { prevDaten: row?.daten, selfOwned });

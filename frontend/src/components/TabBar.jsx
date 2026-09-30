@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutineIds, effectiveRoutines } from '../lib/history.js'
 import { todayISO } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { usePlanEditable } from '../lib/editor-mode.js'
+import { useEditorMode } from '../lib/editor-mode.js'
 import Icon from './Icon.jsx'
 
 export default function TabBar({ onStart }) {
@@ -13,7 +13,9 @@ export default function TabBar({ onStart }) {
   const user = useStore(s => s.user)
   // B&S: im Plan-Editor sieht der Coach das Profil eines Mitglieds — er darf darin
   // kein Training starten, also fällt der Start-Knopf weg (Platzhalter hält das Raster).
-  const editable = usePlanEditable()
+  // In seinem EIGENEN Bereich trainiert er wie jedes Mitglied, darum editorMode und nicht
+  // planEditable.
+  const editable = useEditorMode()
   if (!user) return null
   const cur = loc.pathname.split('/')[1] || 'home'
   const on = k => cur === k || (cur === 'history' && k === 'stats') || (cur === 'settings' && k === 'home') || (cur === 'muscles' && k === 'library')

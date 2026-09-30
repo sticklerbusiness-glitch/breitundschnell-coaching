@@ -10,14 +10,14 @@ import Home from './Home.jsx'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const mocks = vi.hoisted(() => ({ S: null, user: null, editor: null, editable: false }))
+const mocks = vi.hoisted(() => ({ S: null, user: null, editor: null, editable: false, coach: false }))
 vi.mock('../store/useStore.js', () => {
   const snap = () => ({ S: mocks.S, user: mocks.user, editor: mocks.editor })
   const useStore = selector => selector ? selector(snap()) : snap()
   useStore.getState = snap
   return { useStore }
 })
-vi.mock('../lib/editor-mode.js', () => ({ usePlanEditable: () => mocks.editable }))
+vi.mock('../lib/editor-mode.js', () => ({ usePlanEditable: () => mocks.editable || mocks.coach, useEditorMode: () => mocks.editable }))
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 vi.mock('../sheets.jsx', () => ({
   bwSheet: vi.fn(), goalSheet: vi.fn(), dayOverrideSheet: vi.fn(), calendarSheet: vi.fn(),
@@ -33,6 +33,7 @@ beforeEach(() => {
   mocks.user = { id: 'u1', name: 'Ana' }
   mocks.editor = null
   mocks.editable = false
+  mocks.coach = false
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -93,6 +94,33 @@ describe('Home — Plan-Editor', () => {
   it('lässt den Coach einen Plan anlegen, wenn noch keiner da ist', () => {
     mount()
     expect(buttonLabelled('Load starter plan')).toBeTruthy()
+    // B&S: Es ist der Plan des MITGLIEDS — „Eigenen Plan erstellen“ stand hier falsch.
+    expect(buttonLabelled('Build my own plan')).toBeFalsy()
+    expect(buttonLabelled('Plan von Hand anlegen')).toBeTruthy()
+    expect(host.textContent).toContain('Leg die Routinen dieses Mitglieds an')
+  })
+})
+
+/* B&S: Ein Coach ist auch Athlet. In seinem EIGENEN Bereich (ohne ?kunde=) gehört ihm der
+   Plan — der Server sieht das so (api/data.js: selfOwnedPlan), die Oberfläche tat es nicht:
+   er las „Dein Coach stellt deinen Trainingsplan zusammen“ und kam an keine Routine. */
+describe('Home — Coach im eigenen Bereich', () => {
+  beforeEach(() => {
+    mocks.coach = true
+    mocks.user = { id: 'c1', name: 'Valentin', coach: true }
+  })
+
+  it('lässt ihn seinen eigenen Plan anlegen', () => {
+    mount()
+    expect(buttonLabelled('Load starter plan')).toBeTruthy()
     expect(buttonLabelled('Build my own plan')).toBeTruthy()
+    expect(host.textContent).not.toContain('Dein Coach stellt deinen Trainingsplan zusammen.')
+  })
+
+  it('behält Wiegung, Einstellungen und den Rückweg zur Website', () => {
+    mount()
+    expect(buttonLabelled('Log')).toBeTruthy()
+    expect(buttonLabelled('Goal')).toBeTruthy()
+    expect(backLink()).toBeTruthy()
   })
 })

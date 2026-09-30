@@ -24,7 +24,8 @@ vi.mock('../sheets.jsx', () => ({ exerciseDetailSheet: vi.fn(), addToRoutineShee
 // B&S: "+ Plan" writes into a routine, which only the coaches' plan editor may do.
 const ed = vi.hoisted(() => ({ on: false }))
 vi.mock('../lib/editor-mode.js', () => ({
-  usePlanEditable: () => ed.on, planEditable: () => ed.on, readEditorParam: () => null,
+  usePlanEditable: () => ed.on, planEditable: () => ed.on,
+  useEditorMode: () => ed.on, editorMode: () => ed.on, readEditorParam: () => null,
 }))
 
 const mounted = []

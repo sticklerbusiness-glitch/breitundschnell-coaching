@@ -14,7 +14,8 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 // B&S: the Plan screen offers the starter plan only in the coaches' plan editor.
 const ed = vi.hoisted(() => ({ on: true }))
 vi.mock('../lib/editor-mode.js', () => ({
-  usePlanEditable: () => ed.on, planEditable: () => ed.on, readEditorParam: () => null,
+  usePlanEditable: () => ed.on, planEditable: () => ed.on,
+  useEditorMode: () => ed.on, editorMode: () => ed.on, readEditorParam: () => null,
 }))
 vi.mock('../sheets.jsx', () => ({
   starterPlanSheet: vi.fn(), bwSheet: vi.fn(), goalSheet: vi.fn(), dayOverrideSheet: vi.fn(),

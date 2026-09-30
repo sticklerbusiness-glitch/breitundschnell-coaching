@@ -11,7 +11,8 @@ import { useUI } from './store/useUI.js'
 // which has nothing to do with what this file is about.
 const ed = vi.hoisted(() => ({ on: true }))
 vi.mock('./lib/editor-mode.js', () => ({
-  usePlanEditable: () => ed.on, planEditable: () => ed.on, readEditorParam: () => null,
+  usePlanEditable: () => ed.on, planEditable: () => ed.on,
+  useEditorMode: () => ed.on, editorMode: () => ed.on, readEditorParam: () => null,
 }))
 
 import { loadStarterPlan, starterPlanSheet } from './sheets.jsx'

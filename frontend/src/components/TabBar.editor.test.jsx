@@ -9,14 +9,14 @@ import TabBar from './TabBar.jsx'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const mocks = vi.hoisted(() => ({ S: null, user: null, editable: false }))
+const mocks = vi.hoisted(() => ({ S: null, user: null, editable: false, coach: false }))
 vi.mock('../store/useStore.js', () => {
   const snap = () => ({ S: mocks.S, user: mocks.user })
   const useStore = selector => selector ? selector(snap()) : snap()
   useStore.getState = snap
   return { useStore }
 })
-vi.mock('../lib/editor-mode.js', () => ({ usePlanEditable: () => mocks.editable }))
+vi.mock('../lib/editor-mode.js', () => ({ usePlanEditable: () => mocks.editable || mocks.coach, useEditorMode: () => mocks.editable }))
 vi.mock('react-router-dom', () => ({
   useNavigate: () => () => {},
   useLocation: () => ({ pathname: '/home' }),
@@ -27,6 +27,7 @@ beforeEach(() => {
   mocks.S = { active: null, routines: [], week: {}, dayPlan: {}, workouts: [] }
   mocks.user = { id: 'u1', name: 'Ana' }
   mocks.editable = false
+  mocks.coach = false
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -51,6 +52,15 @@ describe('TabBar', () => {
     expect(host.querySelector('button.start')).toBeNull()
     expect(host.querySelectorAll('#tabbar button').length).toBe(4)
     expect(host.querySelector('#tabbar [aria-hidden="true"]')).toBeTruthy()
+  })
+
+  // B&S: Der Coach darf seinen EIGENEN Plan bearbeiten — trainieren tut er auch selbst, der
+  // Start-Knopf gehört also weiterhin dorthin.
+  it('behält ihn für einen Coach in seinem eigenen Bereich', () => {
+    mocks.coach = true
+    mount()
+    expect(host.querySelector('button.start')).toBeTruthy()
+    expect(host.querySelectorAll('#tabbar button').length).toBe(5)
   })
 
   it('bleibt ohne angemeldetes Mitglied ganz weg', () => {

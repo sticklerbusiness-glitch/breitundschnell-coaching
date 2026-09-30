@@ -9,9 +9,10 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const ed = vi.hoisted(() => ({ on: false }))
+const ed = vi.hoisted(() => ({ on: false, coach: false }))
 vi.mock('../lib/editor-mode.js', () => ({
-  usePlanEditable: () => ed.on, planEditable: () => ed.on, readEditorParam: () => null,
+  usePlanEditable: () => ed.on || ed.coach, planEditable: () => ed.on || ed.coach,
+  useEditorMode: () => ed.on, editorMode: () => ed.on, readEditorParam: () => null,
 }))
 
 import Settings from './Settings.jsx'
@@ -53,6 +54,7 @@ vi.mock('../sheets.jsx', () => ({
 let host, root
 beforeEach(() => {
   ed.on = false
+  ed.coach = false
   mocks.S = {
     unit: 'kg', restSec: 90, restPauseSec: 15, sound: false, effort: 'none', gifSize: 'full',
     workouts: [{ id: 'w1', d: '2026-01-02', entries: [{ id: '0001', sets: [{ w: 100, r: 5, done: true }] }] }],
@@ -156,5 +158,18 @@ describe('im Plan-Editor bleiben die zerstörenden Wege zu', () => {
     expect(mocks.confirmSheet).not.toHaveBeenCalled()
     expect(mocks.replaceState).not.toHaveBeenCalled()
     expect(mocks.toast.mock.calls[0][0]).toContain('Im Plan-Editor')
+  })
+})
+
+/* B&S: Der Riegel gilt dem Plan-Editor, nicht dem Plan-Recht. Ein Coach in seinem eigenen
+   Bereich darf seinen Plan schreiben UND seine Einstellungen zurücksetzen — es sind seine. */
+describe('im eigenen Bereich eines Coaches bleiben sie offen', () => {
+  beforeEach(() => { ed.coach = true })
+
+  it('„Alles zurücksetzen“ fragt wie bei jedem Mitglied nach', () => {
+    mount()
+    clickRow('Reset everything')
+    expect(mocks.confirmSheet).toHaveBeenCalledTimes(1)
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
 })

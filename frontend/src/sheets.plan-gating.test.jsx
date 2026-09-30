@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ed = vi.hoisted(() => ({ on: false }))
 vi.mock('./lib/editor-mode.js', () => ({
-  usePlanEditable: () => ed.on, planEditable: () => ed.on, readEditorParam: () => null,
+  usePlanEditable: () => ed.on, planEditable: () => ed.on,
+  useEditorMode: () => ed.on, editorMode: () => ed.on, readEditorParam: () => null,
 }))
 
 import { addToRoutineSheet, dayAssignSheet, dayAddRoutineSheet, planImportSheet, beginWorkout } from './sheets.jsx'

@@ -80,19 +80,36 @@ Als Coach den Plan eines Mitglieds bearbeiten: `http://localhost:5174/training/?
 ## Tests
 
 ```bash
-npm test                     # Backend: lib/ und api/ (vitest, ohne Datenbank)
+npm test                     # Backend + Auslieferung (vitest, ohne Datenbank)
 cd frontend && npx vitest run    # Frontend
 cd frontend && npx vite build    # Build (landet in frontend/dist/training/)
 ```
 
-Der Build stempelt den Service Worker mit dem Build-Hash und **bricht ab**, wenn das nicht
-klappt (früher lief er still durch und lieferte einen Worker mit Platzhalter-Cachenamen aus).
-`frontend/src/lib/deploy-config.test.js` prüft die Regeln aus `vercel.json` gegen die App —
-Cache, Sicherheits-Header und den `Service-Worker-Allowed`-Geltungsbereich.
+`npm test` im Wurzelverzeichnis ist `vitest run` mit der Liste aus [`vitest.config.js`](vitest.config.js):
 
-`npm test` im Wurzelverzeichnis ist `vitest run --dir lib`. Ohne die Abhängigkeiten hier
-(`npm install`) laufen dieselben Tests auch über das Frontend:
-`npx --prefix frontend vitest run --dir lib --root .`
+- **`lib/`** — der geteilte Servercode. Die Handler unter `api/` haben keine eigenen
+  Testdateien (Vercel baut jede Datei dort als Function, ein Test wäre ein Endpunkt); sie
+  kommen über `lib/handlers.test.js` mit, und `lib/api-endpunkte.test.js` lädt jeden von
+  ihnen einmal und verlangt einen Default-Export — das fängt vertippte Importe, die sonst
+  erst in der Produktion 500 werfen.
+- **die vier Tests der Auslieferung aus `frontend/src/lib/`** — `deploy-config.test.js`
+  (Cache-, Sicherheits- und `Service-Worker-Allowed`-Header aus `vercel.json` gegen die
+  Pfade, die wirklich angefragt werden), `sw.test.js` (führt `public/sw.js` in einer
+  nachgebauten Worker-Umgebung aus), `sw-register.test.js`, `canonical-host.test.js`.
+  Sie liegen im Frontend, gehören aber zur Auslieferung und liefen vorher in keinem Lauf
+  außer einem von Hand angestoßenen.
+
+Fünf Prüfungen in `deploy-config.test.js` greifen über die Verzeichnisgrenze nach `../website/`
+(CSP zeichengleich mit `next.config.ts`, `X-Frame-Options`, kein doppelter
+`Service-Worker-Allowed`, Nexts Schrägstrich-Regel, und dass der Mitgliederbereich `/training`
+**ohne** Schrägstrich verlinkt). `website/` ist ein **eigenes Git-Repository** — in einem
+frischen Klon dieses Repos liegt es nicht daneben, dann werden die fünf **sichtbar
+übersprungen** (`↓` im Protokoll, nicht grün). Wer die CSP ändert, ändert sie in beiden
+Dateien und lässt `npm test` einmal dort laufen, wo beide Verzeichnisse nebeneinander liegen.
+
+Der Build stempelt den Service Worker mit dem Build-Hash **und** mit der Liste aller gebauten
+Dateien (`__BUILD__`, `__ASSETS__`) und **bricht ab**, wenn eines davon nicht klappt (früher
+lief er still durch und lieferte einen Worker mit Platzhalter-Cachenamen aus).
 
 ## Umgebungsvariablen
 
@@ -151,7 +168,17 @@ sind so gelöst, dass sie unter **beiden** Schreibweisen funktionieren:
 |---|---|---|
 | Icon-Pfade | relative `icon-180.png` würden unter `/training` gegen den Domain-Stamm aufgelöst (404, „Zum Home-Bildschirm" bekäme auf iOS einen Screenshot) | `frontend/index.html` — absolute `%BASE_URL%`-Pfade |
 | Service-Worker-Geltungsbereich | der Worker liegt unter `/training/sw.js`, sein Standardbereich ist `/training/` — die Seite unter `/training` fällt heraus, der Worker lädt 2,6 MB und kontrolliert nie etwas | Header `Service-Worker-Allowed: /training` in `vercel.json` + `scope` in `frontend/src/lib/sw-register.js` |
-| Zweitkopie auf `*.vercel.app` | dieselbe App ohne Sitzung, mit eigenem Worker und eigenem localStorage | `frontend/src/lib/canonical-host.js` leitet im Browser auf die echte Domain um (`?direkt=1` hängt das für Tests aus); serverseitig geht das nicht, weil genau über diese Adresse der Rewrite läuft |
+| Zweitkopie auf `*.vercel.app` | dieselbe App ohne Sitzung, mit eigenem Worker und eigenem localStorage | `frontend/src/lib/canonical-host.js` leitet im Browser auf die echte Domain um (`?direkt=1` hängt das für die Sitzung aus); serverseitig geht das nicht, weil genau über diese Adresse der Rewrite läuft |
+
+Umgeleitet werden **nur die eigenen Adressen des Gym-Projekts**
+(`breitundschnell-coaching*.vercel.app`), nicht jedes `*.vercel.app`: eine **Preview der
+Website** liefert `/training` über denselben Rewrite wie live aus und ist die einzige Stelle,
+an der sich diese Naht vor dem Livegang prüfen lässt — eine Umleitung von dort schickte den
+Prüfenden unbemerkt auf die Produktion. Damit das funktioniert, muss `GYM_URL` im
+Vercel-Projekt der Website auch für die Umgebung **„Preview"** gesetzt sein; sonst gibt es dort
+keine Rewrite-Regel und `/training` antwortet 404. Wird das Gym-Projekt bei Vercel umbenannt,
+gehört der neue Name in `canonical-host.js` (dann leitet bis dahin nichts um — die App
+funktioniert, die Zweitkopie bleibt nur erreichbar).
 
 Und ein vierter Punkt, der nur dadurch keiner ist, dass `vercel.json` ihn in Ruhe lässt:
 `trailingSlash` steht dort **nicht** — Vercels Voreinstellung liefert `/training` und
@@ -161,15 +188,44 @@ Gym-Projekt antwortete dann mit 308 auf `/training`, der Browser landet wieder a
 `breitundschnell.de/training`, der Rewrite fragt wieder `/training/` an. Ein Test hält das
 fest (`deploy-config.test.js`).
 
-**Abnahmetest nach dem Deploy** (in der Konsole auf `https://breitundschnell.de/training`):
+Und weil das die eine richtige Adresse ist, verlinkt die Website sie auch so: `/training` ohne
+Schrägstrich in `website/src/app/app/` (Reiter „Training", der Knopf auf „Heute", die Weiche
+`/app/training`). Mit Schrägstrich antwortet Next 308, der Service Worker fängt die Navigation
+ab und bekommt wegen `redirect: 'manual'` eine `opaqueredirect`-Antwort, der Browser folgt und
+fragt `/training` erneut an — eine zusätzliche Runde durch den Proxy bei jedem App-Start. Auch
+das hält ein Test fest (er wird übersprungen, wenn `website/` nicht daneben liegt). Die zwei
+Coach-Links aus dem Admin-Bereich (`/training/?kunde=<id>#/plan`) tragen ihn noch.
+
+**Abnahmetest nach dem Deploy** (in der Konsole auf `https://breitundschnell.de/training`,
+nach einem Reload):
 
 ```js
-navigator.serviceWorker.controller !== null   // muss true sein (nach einem Reload)
+navigator.serviceWorker.controller !== null                         // muss true sein
+(await navigator.serviceWorker.getRegistrations()).map(r => r.scope) // genau EINE, endet auf /training
 ```
 
-Ist es `false`, kam `Service-Worker-Allowed` nicht durch den Rewrite-Proxy. Dann registriert
-sich der Worker (`sw-register.js`) ersatzweise mit dem Standardbereich — die App läuft normal
-weiter, hat aber keinen Offline-Modus.
+Die zweite Zeile gehört dazu, weil `sw-register.js` genau zwei Wege kennt: den weiten Bereich
+`/training` (richtig) und — **nur** wenn der Browser ihn mit `SecurityError` verbietet, der
+Header also nicht durch den Rewrite-Proxy kam — ersatzweise den Standardbereich `/training/`.
+Steht da eine Registrierung, die auf `/training/` endet, fehlt der Header. Bei jedem anderen
+Fehler (Netz weg, 502 vom Proxy) wird **nicht** ersatzweise registriert: sonst hinge nach
+einem schlechten WLAN für immer eine zweite Registrierung an der Domain, die bei jedem Deploy
+den Precache ein zweites Mal über Mobilfunk lädt. Eine so entstandene alte enge Registrierung
+meldet `sw-register.js` ab, sobald die weite steht.
+
+Kommt der Header nicht durch, kostet das **zweierlei**: keinen Offline-Modus (die Seite unter
+`/training` hat keinen Controller) **und** die Pausen-Benachrichtigung zwischen den Sätzen —
+`store/useUI.js` holt sich dafür `registration.showNotification`, weil Android Chrome den
+`Notification`-Konstruktor verbietet (`Illegal constructor`); ohne Registrierung fällt sie
+stumm aus.
+
+**Was der Worker vorab lädt:** alle Dateien des Builds (~2,6 MB, die Liste setzt
+`vite.config.js` beim Build in `sw.js` ein), nicht nur die in der `index.html` verlinkten. Die
+deutsche Oberfläche, die Übungsnamen und die Ausführungshinweise sind eigene, nachgeladene
+Chunks — ohne sie stünde ein Mitglied nach einem Deploy offline vor einer englischen
+Oberfläche (`lib/i18n.js` fällt still auf ein leeres Wörterbuch zurück). Beim `activate`
+räumt der Worker nur Caches mit dem Präfix `bs-training-` weg: `caches.keys()` gilt für die
+ganze Domain, und die Website liegt auf derselben.
 
 ### Header in `vercel.json`
 
@@ -184,8 +240,12 @@ weiter, hat aber keinen Offline-Modus.
   Schicht beim gleichen Header-Namen gewinnt; ein Test vergleicht die beiden Zeichenketten.
 - **Cache:** alles unter `/training/assets/` trägt den Inhalts-Hash im Namen und wird ein Jahr
   `immutable` ausgeliefert (sonst revalidiert jeder App-Start ~25 Dateien über den Proxy);
-  `sw.js` und die Hülle (`/training`, `/training/`, `/training/index.html` — je nach Weg kommt
-  ein anderer Pfad an) nie aus dem Cache.
+  die ungehashten Dateien aus `frontend/public/` (die drei Icons, `lizenzen.txt`) einen Tag —
+  ohne eigene Regel gilt für sie Vercels Voreinstellung `max-age=0, must-revalidate` und jeder
+  App-Start schickt bedingte Anfragen quer durch den Proxy. Ein Test verlangt für **jede**
+  Datei aus `public/` eine Regel, damit eine neue nicht wieder durchfällt. `sw.js` und die
+  Hülle (`/training`, `/training/`, `/training/index.html` — je nach Weg kommt ein anderer
+  Pfad an) nie aus dem Cache.
 
 ---
 

@@ -40,7 +40,8 @@ vi.mock('../store/useUI.js', () => {
 })
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 vi.mock('../lib/editor-mode.js', () => ({
-  usePlanEditable: () => false, planEditable: () => false, readEditorParam: () => null,
+  usePlanEditable: () => false, planEditable: () => false,
+  useEditorMode: () => false, editorMode: () => false, readEditorParam: () => null,
 }))
 vi.mock('../components/Media.jsx', () => ({ default: () => null }))
 vi.mock('../lib/api.js', () => ({

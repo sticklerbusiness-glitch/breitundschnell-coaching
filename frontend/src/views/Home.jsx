@@ -10,7 +10,7 @@ import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
-import { usePlanEditable } from '../lib/editor-mode.js'
+import { useEditorMode, usePlanEditable } from '../lib/editor-mode.js'
 import { APP_NAME } from '../lib/brand.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
@@ -18,9 +18,12 @@ export default function Home() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
-  // B&S: Plan-Editor — hier sieht der Coach das Profil eines Mitglieds. Alles, was etwas
-  // eintragen oder ein Training starten würde, bleibt aus; die Ansicht ist nur zum Lesen.
-  const editable = usePlanEditable()
+  // B&S: Zwei Fragen (lib/editor-mode.js). `imEditor` — der Coach sieht das Profil eines
+  // Mitglieds an: alles, was etwas eintragen oder ein Training starten würde, bleibt aus.
+  // `planEditable` — der Plan auf dem Schirm darf geschrieben werden: im Editor und im
+  // eigenen Bereich eines Coaches (dort trainiert und wiegt er sich aber selbst).
+  const imEditor = useEditorMode()
+  const planEditable = usePlanEditable()
   const editorName = useStore(s => s.editor?.name)
   const [weekOffset, setWeekOffset] = useState(0)
 
@@ -52,7 +55,7 @@ export default function Home() {
     const iso = isoOf(d)
     const eff = effectiveRoutineIds(S, iso).length > 0, ovr = S.dayPlan[iso] !== undefined, done = doneDays.has(iso)
     const dot = done ? ' done' : ovr && eff ? ' ovr' : eff ? ' plan' : ''
-    strip.push(<div key={i} className={'wday' + (iso === todayISO() ? ' today' : '')} {...(editable ? {} : tappable(() => dayOverrideSheet(iso)))}>
+    strip.push(<div key={i} className={'wday' + (iso === todayISO() ? ' today' : '')} {...(imEditor ? {} : tappable(() => dayOverrideSheet(iso)))}>
       <div className="lbl">{t(DAYS[d.getDay()])}</div><div className="num">{d.getDate()}</div><div className={'dot' + dot} /></div>)
   }
   const wkEnd = new Date(wkStart); wkEnd.setDate(wkStart.getDate() + 6)
@@ -71,12 +74,12 @@ export default function Home() {
       <div style={{ minWidth: 0 }}>
         {/* B&S: Rückweg in den Mitgliederbereich der Website. Die Trainings-App läuft unter
             /training/, also ein echter Link und keine Route — leise, aber immer sichtbar. */}
-        {!editable && <a href="/app" className="small" style={{ color: 'var(--label-2)', display: 'inline-block', marginBottom: 4 }}>← Mein Bereich</a>}
+        {!imEditor && <a href="/app" className="small" style={{ color: 'var(--label-2)', display: 'inline-block', marginBottom: 4 }}>← Mein Bereich</a>}
         <h1>{editorName || (user ? t('Hi {0}', user.name) : APP_NAME)}</h1>
         <div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       </div>
       {/* B&S: Im Plan-Editor gibt es keine Einstellungen — sie gehören dem Mitglied. */}
-      {!editable && <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>}
+      {!imEditor && <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>}
     </div>
 
     <div className="card">
@@ -91,7 +94,7 @@ export default function Home() {
           routine name behind a green Start tag and read as still outstanding (issue #4).
           An in-progress session still wins — that one is happening right now. Tapping the
           row keeps working, so a second session in one day is a tap away, just not urged. */}
-      <div className="today-row" {...(editable ? {} : tappable(onToday))}>
+      <div className="today-row" {...(imEditor ? {} : tappable(onToday))}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
           <span className="lrow-i" style={{ background: S.active ? 'var(--orange)' : doneToday ? 'var(--surface-3)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
             <Icon name={S.active ? 'timer' : doneToday ? 'checkCircle' : routine ? glyphOf(routine.emoji) : 'moon'}
@@ -105,7 +108,7 @@ export default function Home() {
             {next && !doneToday && <div className="ss">{t('Next session: {0}, {1}', t(DAYN[next.weekday]), next.routine.name)}</div>}
           </div>
         </div>
-        {editable ? null
+        {imEditor ? null
           : S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
           : doneToday ? <span className="tag" style={{ color: 'var(--green)', background: 'color-mix(in srgb,var(--green) 16%,transparent)' }}>{t('Done')}</span>
           : routine ? <span className="tag acc">{t('Start')}</span>
@@ -120,12 +123,16 @@ export default function Home() {
       <div className="card">
         <div className="row" style={{ gap: 10, marginBottom: 6 }}>
           <span className="lrow-i"><Icon name="sparkles" /></span>
-          <div className="big" style={{ fontSize: 22 }}>{editable ? 'Noch kein Plan' : 'Willkommen!'}</div>
+          <div className="big" style={{ fontSize: 22 }}>{planEditable ? 'Noch kein Plan' : 'Willkommen!'}</div>
         </div>
-        {editable ? <>
-          <div className="muted small" style={{ marginBottom: 12 }}>Leg die Routinen dieses Mitglieds an — von Hand oder aus einem Startplan.</div>
+        {planEditable ? <>
+          <div className="muted small" style={{ marginBottom: 12 }}>{imEditor
+            ? 'Leg die Routinen dieses Mitglieds an — von Hand oder aus einem Startplan.'
+            : 'Leg deine Routinen an — von Hand oder aus einem Startplan.'}</div>
           <Button variant="primary" icon="sparkles" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>
-          <div style={{ height: 8 }} /><Button onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
+          {/* B&S: Im Editor ist es der Plan des MITGLIEDS — „Eigenen Plan erstellen“ wäre dort
+              die falsche Beschriftung. */}
+          <div style={{ height: 8 }} /><Button onClick={() => nav('/plan')}>{imEditor ? 'Plan von Hand anlegen' : t('Build my own plan')}</Button>
         </> : (
           <div className="muted small">Dein Coach stellt deinen Trainingsplan zusammen. Sobald er steht, findest du ihn hier und unter „Plan“.</div>
         )}
@@ -135,7 +142,7 @@ export default function Home() {
     <div className="card">
       <div className="row between" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
-        {!editable && <div className="row" style={{ gap: 8 }}>
+        {!imEditor && <div className="row" style={{ gap: 8 }}>
           <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
           <Button size="sm" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
         </div>}
@@ -164,7 +171,7 @@ export default function Home() {
         : t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>}
     </div>
 
-    <div className={editable ? 'card' : 'card tappable'} style={editable ? undefined : { cursor: 'pointer' }} {...(editable ? {} : tappable(() => calendarSheet()))}>
+    <div className={imEditor ? 'card' : 'card tappable'} style={imEditor ? undefined : { cursor: 'pointer' }} {...(imEditor ? {} : tappable(() => calendarSheet()))}>
       <div className="row between">
         <div>
           <div className="row" style={{ gap: 7, fontSize: 22, fontWeight: 600, letterSpacing: '-.021em' }}>

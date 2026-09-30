@@ -1,6 +1,6 @@
 import { json, methodNotAllowed, notFound, fail, query } from '../../lib/http.js';
 import { requireSession, isUserId } from '../../lib/guard.js';
-import { isCoach } from '../../lib/session.js';
+import { isCoach, planGehoertDemCoach } from '../../lib/session.js';
 import { findUser, getStand } from '../../lib/repo.js';
 import { compose } from '../../lib/state.js';
 import { planRev } from '../../lib/plan.js';
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     const member = await findUser(ctx.sql, target);
     // Ein anderer Coach ist kein Trainingsziel — und "gibt es nicht" ist die
     // Antwort, die am wenigsten über die Mitgliederliste verrät.
-    if (!member || member.rolle !== 'TEILNEHMER') return notFound(res);
+    if (!member || !planGehoertDemCoach(member)) return notFound(res);
 
     const row = await getStand(ctx.sql, member.id);
     // B&S: `rev` ist hier die Revision des PLANS, nicht die der Zeile. Der Editor

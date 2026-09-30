@@ -15,7 +15,7 @@ import Media from '../components/Media.jsx'
 // B&S: the coach's own demo clip, carried on the entry's target as `yt`.
 import YouTube from '../components/YouTube.jsx'
 import { youtubeId } from '../lib/youtube.js'
-import { usePlanEditable } from '../lib/editor-mode.js'
+import { useEditorMode } from '../lib/editor-mode.js'
 import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWorkout, workoutCompleteSheet, confirmSheet, exerciseNoteSheet, sessionNoteSheet, swapActiveWorkoutExercise, barWeightSheet, menuSheet, effortPickerSheet, exerciseHistorySheet, addRoutineToSessionSheet } from '../sheets.jsx'
 import { effortColor } from '../lib/effort.js'
 import Icon from '../components/Icon.jsx'
@@ -36,7 +36,7 @@ function StartChooser() {
   const S = useStore(s => s.S)
   // B&S: in the plan editor the coach is looking at someone else's profile — nothing here
   // may be started in their name. (The tab bar hides the Start button; this is the URL.)
-  const editing = usePlanEditable()
+  const editing = useEditorMode()
   if (editing) return <div className="narrow">
     <div className="hdr"><div><h1>{t('Start workout')}</h1><div className="sub">Plan-Editor</div></div></div>
     <div className="empty"><div className="ico"><Icon name="pencil" /></div>

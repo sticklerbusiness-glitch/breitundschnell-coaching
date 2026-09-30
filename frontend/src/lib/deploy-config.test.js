@@ -2,7 +2,7 @@
 // falsch sind sie still: ein Header, der auf einen Pfad zeigt, den niemand anfragt, fällt erst
 // im Betrieb auf. Geprüft wird deshalb gegen die URLs, die wirklich entstehen (Vite-Base
 // /training/, die gebaute index.html) statt gegen die Schreibweise in der Konfiguration.
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { swScope } from './sw-register.js'
 import { youtubeEmbed } from './youtube.js'
@@ -58,14 +58,43 @@ describe('vercel.json — Cache', () => {
     expect(headerFür(`${BASE}assets/inter-latin-400-normal-DxGVaZUe.woff2`)['Cache-Control']).toBe(wert)
   })
 
-  it('trifft damit die Pfade, die die gebaute Hülle wirklich anfragt', () => {
-    const gebaut = new URL('frontend/dist/training/index.html', wurzel)
-    if (!existsSync(gebaut)) return          // ohne Build nichts zu prüfen
-    const refs = [...readFileSync(gebaut, 'utf8').matchAll(/(?:src|href)="([^"]+)"/g)].map(m => m[1])
+  const gebaut = new URL('frontend/dist/training/', wurzel)
+  it.skipIf(!existsSync(gebaut))('trifft damit die Pfade, die die gebaute Hülle wirklich anfragt', () => {
+    const refs = [...readFileSync(new URL('index.html', gebaut), 'utf8').matchAll(/(?:src|href)="([^"]+)"/g)].map(m => m[1])
     const dateien = refs.filter(u => u.startsWith(`${BASE}assets/`))
     expect(dateien.length).toBeGreaterThan(0)
     for (const u of dateien) {
       expect(headerFür(u)['Cache-Control'], u).toBe('public, max-age=31536000, immutable')
+    }
+  })
+
+  // B&S: Nicht nur assets/. Neben den gehashten Dateien liegen die Icons und lizenzen.txt
+  // ungehasht im Build (aus frontend/public/) — ohne eigene Regel gilt für sie Vercels
+  // Voreinstellung `max-age=0, must-revalidate`, und jeder App-Start schickt drei bedingte
+  // Anfragen quer durch den Rewrite-Proxy. Geprüft wird gegen public/ statt gegen einen
+  // Build: das Verzeichnis ist eingecheckt, der Test läuft also auch in einem frischen Klon.
+  it('gibt auch den ungehashten Dateien aus public/ eine Cache-Regel', () => {
+    const dateien = readdirSync(new URL('frontend/public/', wurzel)).filter(n => n !== 'sw.js')
+    expect(dateien.length).toBeGreaterThan(0)
+    for (const name of dateien) {
+      const wert = headerFür(`${BASE}${name}`)['Cache-Control']
+      expect(wert, name).toBeTruthy()
+      expect(wert, name).toMatch(/max-age=[1-9]/)
+    }
+  })
+
+  it.skipIf(!existsSync(gebaut))('lässt im Build keine Datei ohne Cache-Regel zurück', () => {
+    const alle = []
+    const sammle = (ordner, praefix = '') => {
+      for (const e of readdirSync(new URL(ordner, gebaut), { withFileTypes: true })) {
+        if (e.isDirectory()) sammle(`${ordner}${e.name}/`, `${praefix}${e.name}/`)
+        else alle.push(praefix + e.name)
+      }
+    }
+    sammle('')
+    expect(alle.length).toBeGreaterThan(5)
+    for (const name of alle) {
+      expect(headerFür(`${BASE}${name}`)['Cache-Control'], name).toBeTruthy()
     }
   })
 
@@ -85,6 +114,18 @@ describe('vercel.json — Service Worker', () => {
     for (const pfad of ['/training', '/training/', '/training/irgendwas']) {
       expect(pfad.startsWith(bereich), pfad).toBe(true)
     }
+  })
+
+  // B&S: Der erlaubte Bereich ist für den Browser ein reiner Zeichenketten-Vergleich — eine
+  // künftige Seite der Website unter /trainingsplan läge darin und würde vom Gym-Worker
+  // gekapert (network-first mit Ablage im Gym-Cache, offline die Trainings-App statt der
+  // Seite). Deshalb prüft der Worker selbst auf Pfadsegmente nach; das Verhalten steht in
+  // sw.test.js, hier die Zusicherung, dass der Riegel in der ausgelieferten Datei steht.
+  it('taugt allein nicht — /trainingsplan liegt darin, sw.js muss selbst nachprüfen', () => {
+    const bereich = headerFür(`${BASE}sw.js`)['Service-Worker-Allowed']
+    expect('/trainingsplan'.startsWith(bereich)).toBe(true)
+    const sw = readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8')
+    expect(sw).toMatch(/startsWith\(BEREICH\)/)
   })
 })
 
@@ -143,11 +184,17 @@ describe('index.html', () => {
   })
 })
 
+// B&S: `website/` liegt in einem ZWEITEN Git-Repository neben diesem. In einem frischen Klon
+// des (öffentlichen) Gym-Repos und in jedem Vercel-Build existiert die Datei also nicht. Diese
+// vier Prüfungen laufen deshalb nur auf einem Rechner, auf dem beide Verzeichnisse
+// nebeneinander liegen — und sie werden dort SICHTBAR übersprungen (`skipIf`) statt still grün
+// durchzulaufen. Wer die CSP ändert, ändert sie in beiden Dateien und lässt hier einmal
+// `npm test` laufen; das steht so auch in der README unter „Tests".
 describe('website/next.config.ts', () => {
   const next = new URL('../website/next.config.ts', wurzel)
+  const ohneWebsite = !existsSync(next)
 
-  it('trägt dieselbe CSP wie vercel.json — sonst hängt der Schutz davon ab, wer gewinnt', () => {
-    if (!existsSync(next)) return            // Gym-Repo allein ausgecheckt
+  it.skipIf(ohneWebsite)('trägt dieselbe CSP wie vercel.json — sonst hängt der Schutz davon ab, wer gewinnt', () => {
     const quelle = readFileSync(next, 'utf8')
     const block = quelle.match(/const GYM_CSP =([\s\S]*?);\n/)
     expect(block, 'GYM_CSP in next.config.ts').not.toBe(null)
@@ -155,8 +202,7 @@ describe('website/next.config.ts', () => {
     expect(zusammengesetzt).toBe(headerFür('/training')['Content-Security-Policy'])
   })
 
-  it('schützt /training auch dann vor dem iframe, wenn der Proxy die Header schluckt', () => {
-    if (!existsSync(next)) return
+  it.skipIf(ohneWebsite)('schützt /training auch dann vor dem iframe, wenn der Proxy die Header schluckt', () => {
     const quelle = readFileSync(next, 'utf8')
     expect(quelle).toMatch(/key: "X-Frame-Options", value: "DENY"/)
     expect(quelle).toMatch(/source: "\/training"/)
@@ -167,9 +213,11 @@ describe('website/next.config.ts', () => {
   // CSP; zwei `Service-Worker-Allowed` könnten als "/training, /training" ankommen — kein
   // gültiger Geltungsbereich mehr, Registrierung schlägt fehl, Worker kontrolliert wieder
   // nichts. Er gehört an die Herkunft, die /training/sw.js ausliefert: vercel.json.
-  it('setzt Service-Worker-Allowed NICHT zusätzlich — der Header darf nicht doppelt kommen', () => {
+  it('setzt den Header hier und nur hier', () => {
     expect(headerFür(`${BASE}sw.js`)['Service-Worker-Allowed']).toBe('/training')
-    if (!existsSync(next)) return
+  })
+
+  it.skipIf(ohneWebsite)('setzt Service-Worker-Allowed NICHT zusätzlich — der Header darf nicht doppelt kommen', () => {
     // nur gesetzt, nicht erwähnt — der Kommentar dort erklärt genau diese Entscheidung
     expect(readFileSync(next, 'utf8')).not.toMatch(/key:\s*"Service-Worker-Allowed"/)
   })
@@ -178,10 +226,24 @@ describe('website/next.config.ts', () => {
   // hier trailingSlash oder skipTrailingSlashRedirect, kippt die kanonische Adresse und mit
   // ihr der Geltungsbereich des Workers und die Icon-Pfade — dann muss das hier mit umgezogen
   // werden statt still zu brechen.
-  it('lässt Nexts Schrägstrich-Regel unangetastet — sonst stimmt die kanonische Adresse nicht mehr', () => {
-    if (!existsSync(next)) return
+  it.skipIf(ohneWebsite)('lässt Nexts Schrägstrich-Regel unangetastet — sonst stimmt die kanonische Adresse nicht mehr', () => {
     const quelle = readFileSync(next, 'utf8')
     expect(quelle).not.toMatch(/^\s*trailingSlash:/m)
     expect(quelle).not.toMatch(/^\s*skipTrailingSlashRedirect:/m)
+  })
+
+  // B&S: …und die Website verlinkt die App auch so. Mit `/training/` antwortet Next 308, der
+  // Service Worker fängt die Navigation ab und bekommt wegen `redirect: 'manual'` eine
+  // opaqueredirect-Antwort, der Browser folgt und fragt /training erneut an — eine
+  // zusätzliche Runde durch den Rewrite-Proxy bei jedem App-Start.
+  it.skipIf(ohneWebsite)('wird vom Mitgliederbereich ohne Schrägstrich verlinkt', () => {
+    const bereich = new URL('../website/src/app/app/', wurzel)
+    const dateien = ['layout.tsx', 'page.tsx', 'training/page.tsx']
+    for (const name of dateien) {
+      const quelle = readFileSync(new URL(name, bereich), 'utf8')
+      const verweise = [...quelle.matchAll(/["'`]\/training\/[^"'`]*["'`]/g)].map(m => m[0])
+      expect(verweise, name).toEqual([])
+      expect(quelle, name).toMatch(/["'`]\/training["'`]/)
+    }
   })
 })

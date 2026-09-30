@@ -53,6 +53,13 @@ function Shell() {
   const { S, user, ready } = useStore()
   // B&S: Plan-Editor des Coaches (?kunde=…) — schaltet Mitglieds-eigene Seiten ab.
   const editor = useStore(s => s.editor)
+  // B&S: Scheitert der Editor (veralteter Link, gelöschtes Mitglied), bleibt `user` leer —
+  // App.jsx hielt den Coach deshalb für abgemeldet und rannte views/Login an. Dessen Effekt
+  // läuft auch unter dem fixed-Overlay von EditorBanner: er schickte über /login (wo die
+  // Website sofort zurückschickt) und setzte dabei die Login-Schleifen-Marke, sodass der
+  // zweite Durchlauf „Anmeldung konnte nicht übernommen werden“ behauptete. Die Routen sind
+  // hinter dem Overlay ohnehin unerreichbar.
+  const editorError = useStore(s => s.editorError)
   // iOS: whether timer sounds get past the ring/silent switch (Settings → Sounds). Page-level,
   // so it is applied here on load and on change rather than at each beep.
   useEffect(() => { setPlayOnSilent(!!S.soundOnSilent) }, [S.soundOnSilent])
@@ -109,7 +116,7 @@ function Shell() {
           {authed && <SyncBanner />}
           {/* B&S: Plan-Editor des Coaches — zeigt sich nur, wenn die App mit ?kunde=… läuft. */}
           <EditorBanner />
-          {!authed ? <Login /> : (
+          {editorError ? null : !authed ? <Login /> : (
             <Routes>
               <Route path="/home" element={<Home />} />
               <Route path="/plan" element={<Plan />} />

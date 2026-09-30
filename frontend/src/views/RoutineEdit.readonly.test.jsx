@@ -7,9 +7,10 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const ed = vi.hoisted(() => ({ on: false }))
+const ed = vi.hoisted(() => ({ on: false, coach: false }))
 vi.mock('../lib/editor-mode.js', () => ({
-  usePlanEditable: () => ed.on, planEditable: () => ed.on, readEditorParam: () => null,
+  usePlanEditable: () => ed.on || ed.coach, planEditable: () => ed.on || ed.coach,
+  useEditorMode: () => ed.on, editorMode: () => ed.on, readEditorParam: () => null,
 }))
 vi.mock('../lib/api.js', () => ({ api: vi.fn(() => Promise.resolve({})) }))
 vi.mock('../sheets.jsx', () => ({
@@ -47,6 +48,7 @@ function mount() {
 beforeEach(() => {
   localStorage.clear()
   ed.on = false
+  ed.coach = false
   const S = clone(DEF)
   S.routines = [{
     id: 'r1', name: 'Push', emoji: 'dumbbell', prog: 'linear',
@@ -113,5 +115,15 @@ describe('RoutineEdit — a member reads the plan', () => {
     ed.on = true
     mount()
     expect(host.querySelector('input.input').getAttribute('maxlength')).toBe('80')
+  })
+
+  /* B&S: Ein Coach ist auch Athlet, und seinen Plan besitzt sein eigenes Dokument
+     (api/data.js: selfOwnedPlan). In seinem eigenen Bereich — ohne ?kunde= — bekommt er
+     darum denselben Editor wie im Plan-Editor eines Mitglieds. */
+  it('gibt einem Coach im eigenen Bereich denselben Editor', () => {
+    ed.coach = true
+    mount()
+    expect(host.querySelectorAll('[data-routine-row]')).toHaveLength(2)
+    expect(host.querySelector('input')).not.toBeNull()
   })
 })

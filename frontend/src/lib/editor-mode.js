@@ -19,7 +19,26 @@ export function readEditorParam() {
   } catch (e) { return null }
 }
 
+/* B&S: Zwei Fragen, nicht eine.
+ *
+ * `editorMode` — sehe ich gerade den Stand eines MITGLIEDS an? Dann gehört mir davon nur der
+ * Plan: Training starten, Favoriten, Wiegungen, Einstellungen, Hantelstangen-Gewicht und die
+ * Notiz einer Einheit gehören ihm und werden hier nur gelesen.
+ *
+ * `planEditable` — darf ich den Plan schreiben, der hier auf dem Schirm steht? Das gilt im
+ * Editor UND im eigenen Bereich eines Coaches: Coaches trainieren selbst, und ihnen schreibt
+ * niemand einen Plan, also gehört ihr Plan ihrem eigenen Dokument (api/data.js: selfOwnedPlan,
+ * lib/state.js: strip/compose mit `selfOwned`). Solange beide Fragen dieselbe Antwort hatten,
+ * sah ein Coach in seiner eigenen App die Lese-Ansicht eines Mitglieds und kam nie an eine
+ * eigene Routine — die Server-Hälfte war gebaut, die Oberfläche fehlte.
+ */
+
 // Außerhalb von React (Handler, Sheets).
-export const planEditable = () => !!useStore.getState().editor
-// In React — rendert mit, wenn der Editor-Modus steht.
-export const usePlanEditable = () => useStore(s => !!s.editor)
+export const editorMode = () => !!useStore.getState().editor
+export const planEditable = () => {
+  const s = useStore.getState()
+  return !!s.editor || !!s.user?.coach
+}
+// In React — rendert mit, wenn sich der Modus ändert.
+export const useEditorMode = () => useStore(s => !!s.editor)
+export const usePlanEditable = () => useStore(s => !!s.editor || !!s.user?.coach)

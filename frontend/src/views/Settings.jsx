@@ -11,7 +11,7 @@ import { wakeLockSupported } from '../lib/wakelock.js'
 import { t } from '../lib/i18n.js'
 import { SOURCE_URL } from '../lib/brand.js'
 // B&S: Im Plan-Editor gehört der Stand dem Mitglied — die zerstörenden Wege bleiben dort zu.
-import { planEditable } from '../lib/editor-mode.js'
+import { editorMode } from '../lib/editor-mode.js'
 import { confirmSheet, importFromApp, importFromHevy, equipmentProfileSheet, menuSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented } from '../components/ui.jsx'
@@ -35,7 +35,7 @@ export default function Settings() {
   // Mitglied — „Alles zurücksetzen“ löschte damit dessen Plan, ein Backup risse die
   // Coach-Übungen heraus. Der Coach hat hier schlicht nichts zu ändern.
   const editorBlocked = () => {
-    if (!planEditable()) return false
+    if (!editorMode()) return false
     toast('Im Plan-Editor bearbeitest du nur den Trainingsplan — die Daten des Mitglieds bleiben unangetastet.')
     return true
   }

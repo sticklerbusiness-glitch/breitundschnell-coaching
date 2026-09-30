@@ -123,10 +123,23 @@ export const redirectToLogin = () => {
 }
 
 // B&S: `?kunde=` aus der Adresse nehmen, ohne die Seite neu zu laden — ab hier liefert
-// readEditorParam() null und die App läuft wie für jedes andere Mitglied.
+// readEditorParam() null und die App läuft wie für jedes andere Mitglied. NUR `kunde`:
+// vorher ging die ganze Query weg und mit ihr `?direkt=1`, die einzige dokumentierte
+// Möglichkeit, ein Preview-Deployment direkt zu prüfen (lib/canonical-host.js) — der nächste
+// Reload warf den Prüfenden auf die Produktion.
 const dropEditorParam = () => {
-  try { history.replaceState(history.state, '', location.pathname + location.hash) } catch (e) { /* ignore */ }
+  try {
+    const u = new URL(location.href)
+    u.searchParams.delete('kunde')
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash)
+  } catch (e) { /* ignore */ }
 }
+
+/* B&S: Im Plan-Editor liegt auch der Übungs-Katalog des MITGLIEDS auf dem Schirm. Was nicht
+   zum Plan gehört (keine Routine benutzt es, keine Coach-Marke), gehört ihm: pushPlan filtert
+   es weg und der Server verwirft es (lib/state.js: coachOwnedCustomEx). Die Änderung stand
+   trotzdem auf dem Schirm, samt „Gespeichert“. sheets.jsx zeigt denselben Text an den Knöpfen. */
+export const MEMBER_EX_HINT = 'Diese Übung hat das Mitglied selbst angelegt — im Plan-Editor kannst du nur die Übungen ändern, die zum Plan gehören.'
 
 const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length)
 
@@ -179,6 +192,38 @@ export const useStore = create((set, get) => {
     import('./useUI.js').then(({ useUI }) => useUI.getState().toast(msg)).catch(() => {})
   }
 
+  /* B&S: Der Server antwortet 200 und sagt dabei, was er verworfen hat: `gekuerzt` sind die
+     Obergrenzen, die er abgeschnitten hat (lib/plan.js), `fremdeUebungen` sind eigene Übungen
+     des Mitglieds, die nicht in den Plan dürfen (lib/state.js: coachOwnedCustomEx). Ohne diese
+     Meldung arbeitete der Coach auf einem Plan weiter, den der Server so nie hatte — und über
+     allem stand „Gespeichert“. Fehlt das Feld (älterer Server), passiert hier nichts. */
+  const GRENZ_TEXT = {
+    routines: 'Routinen (max. 50)',
+    ex: 'Übungen in einer Routine (max. 40)',
+    customEx: 'eigene Übungen (max. 200)'
+  }
+  // Jede Meldung genau einmal: dieselbe Kürzung kommt bei JEDEM weiteren Push zurück (der
+  // Editor schickt den Plan am Stück), und ein Dutzend gleicher Toasts verdeckt die
+  // Meldungen, auf die es hier ankommt.
+  let letzteVerwerfung = ''
+  const sagWasVerworfenWurde = r => {
+    const g = r && typeof r.gekuerzt === 'object' && r.gekuerzt ? r.gekuerzt : null
+    const teile = g ? Object.entries(g).filter(([, n]) => Number.isFinite(n) && n > 0).map(([k, n]) => n + ' × ' + (GRENZ_TEXT[k] || k)) : []
+    const fremde = Array.isArray(r?.fremdeUebungen) ? r.fremdeUebungen.filter(id => typeof id === 'string') : []
+    const msg = teile.length
+      ? 'Beim Speichern gekürzt: ' + teile.join(', ') + '. Lade den Plan neu, um den gespeicherten Stand zu sehen.'
+      : fremde.length
+        // B&S: Neutral formuliert — derselbe Hinweis kommt auch, wenn der Coach eine eigene
+        // Übung des Mitglieds ganz regulär in eine Routine hängt (die Routine behält sie, nur
+        // der Katalog-Eintrag bleibt dem Mitglied). Ein Vorwurf wäre dort falsch.
+        ? 'Eigene Übungen des Mitglieds bleiben seine — Namen und Beschreibungen daran speichert der Server nicht.'
+        : ''
+    const marke = msg + '|' + fremde.join(',')
+    if (!msg || marke === letzteVerwerfung) return
+    letzteVerwerfung = marke
+    hinweis(msg)
+  }
+
   /* B&S: Die Grenze des Plan-Editors liegt hier im Store, nicht in den einzelnen Ansichten.
      Auf dem Bildschirm steht der Stand des Mitglieds; dem Coach gehört davon nur der Plan —
      `routines`, `week` und die eigenen Übungen (`customEx`), die der Plan benutzt. Jede andere
@@ -217,6 +262,24 @@ export const useStore = create((set, get) => {
     const had = new Set((cur.customEx || []).map(e => e && e.id))
     next.customEx = (next.customEx || []).map(e => (e && e.id && !had.has(e.id) && e.src !== 'coach' ? { ...e, src: 'coach' } : e))
   }
+  /* B&S: …und die Gegenprobe. Ein Eintrag, den der Coach weder selbst angelegt hat
+     (`src:'coach'`) noch eine Routine benutzt, gehört dem Mitglied. pushPlan filtert ihn weg
+     und lib/state.js: coachOwnedCustomEx verwirft ihn — die Umbenennung stünde auf dem Schirm,
+     der Plan bliebe unverändert, der Server antwortete 200 und das Banner meldete
+     „Gespeichert“. Also gar nicht erst anwenden. Neue Einträge trägt markCoachEx bereits. */
+  const touchesMemberEx = (cur, next) => {
+    const used = new Set()
+    for (const r of (cur.routines || [])) for (const e of (r?.ex || [])) if (e?.id) used.add(e.id)
+    const nachher = new Map((next.customEx || []).filter(e => e && e.id).map(e => [e.id, e]))
+    for (const e of (cur.customEx || [])) {
+      if (!e || !e.id) continue
+      const n = nachher.get(e.id)
+      if (n && same(e, n)) continue
+      if (e.src === 'coach' || used.has(e.id)) continue
+      return true
+    }
+    return false
+  }
 
   // `_ts` is when this device last changed the data — it decides which copy wins on the next
   // pull (restoredStateFor). A copy merely adopted from the server keeps the stamp it came
@@ -237,6 +300,7 @@ export const useStore = create((set, get) => {
       const next = planOnly(cur, S)
       const editing = !!get().editor
       if (editing) markCoachEx(cur, next)
+      if (editing && touchesMemberEx(cur, next)) { hinweis(MEMBER_EX_HINT); return }
       registerCustom(next.customEx)
       // B&S: „Gespeichert“ darf nie über einer Änderung stehen, die noch in der Sammlung liegt.
       set({ S: next, ...(editing && push ? { editorSave: 'idle' } : {}) })
@@ -308,8 +372,12 @@ export const useStore = create((set, get) => {
   // real change this device now holds — while `ts` in the marker stays old, so a pull that
   // happens before the push lands still sees it as unsent.
   const mergeInto = (local, remote, rev) => {
-    // B&S: `server: 'b'` — routines/week gehören den Coaches, die Server-Kopie gilt.
-    const merged = Object.assign(clone(DEF), mergeStates(local, remote, { server: 'b' }))
+    // B&S: `server: 'b'` — routines/week gehören den Coaches, die Server-Kopie gilt. Ist der
+    // angemeldete Benutzer SELBST Coach, ist das sein eigener Plan (api/data.js: selfOwnedPlan)
+    // und gehört in die normale _ts-Logik: sonst wäre eine offline gemachte Planänderung von
+    // ihm still weg.
+    const eigenerPlan = !!get().user?.coach
+    const merged = Object.assign(clone(DEF), mergeStates(local, remote, eigenerPlan ? {} : { server: 'b' }))
     merged.active = local.active || null
     persist(merged, false)
     writeSync(rev, readSync()?.ts || 0)
@@ -415,11 +483,21 @@ export const useStore = create((set, get) => {
     // B&S: Beim Verlassen der Seite bricht der Browser einen normalen fetch ab. `keepalive`
     // lässt ihn weiterlaufen, auch wenn die Seite schon weg ist — sonst verliert der Coach
     // genau die Änderung, die er als Letztes gemacht hat.
-    if (get().editor) get().pushPlan({ keepalive: true })
+    if (get().editor) get().pushPlan({ keepalive: true })   // pushPlan hält die Ein-PUT-Sperre
     else get().pushState()
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush() })
   window.addEventListener('pagehide', flush)   // Safari kills the home-screen app without a visibilitychange at times
+  // B&S: Im Plan-Editor schreibt nichts in den localStorage — was beim Verlassen der Seite
+  // noch in der Sammlung liegt oder gerade unterwegs ist, ist danach weg. Ein zu großer Plan
+  // fährt ohnehin ohne `keepalive` (siehe pushPlan), und ein Abschieds-Push hinter einem
+  // laufenden PUT kommt nicht mehr los. Also fragen, statt still zu verlieren.
+  window.addEventListener('beforeunload', e => {
+    if (!get().editor) return
+    if (pushTm === null && planPushing === null) return
+    e.preventDefault()
+    e.returnValue = ''   // ältere Browser zeigen den Dialog nur mit gesetztem returnValue
+  })
 
   // The owner check in setUser only runs in the tab that signs in. Another tab of the same
   // browser still holding the previous profile would keep writing that profile's data over the
@@ -466,7 +544,7 @@ export const useStore = create((set, get) => {
        Speicherstand für das Banner. */
     editor: null,
     editorError: null,
-    editorSave: 'idle',   // 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
+    editorSave: 'idle',   // 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'loading' | 'reload-error'
     // B&S: läuft, solange bootEditor auf den Server wartet — siehe inEditor().
     editorBoot: false,
     // B&S: der Plan-Stand, auf dem dieser Editor sitzt (rev aus /api/trainer/stand bzw. aus der
@@ -692,6 +770,11 @@ export const useStore = create((set, get) => {
         // `user` erst jetzt: bis hierher hält App.jsx den Ladebildschirm.
         const stand = await api('/api/trainer/stand?user=' + encodeURIComponent(userId))
         get().applyStand(stand, userId)
+        // B&S: Eine bestätigte Anmeldung beendet den Schleifen-Schutz — dieselbe Zeile wie in
+        // setUser(), das hier nicht benutzt werden darf (es schriebe gym_user/gym_owner des
+        // Coaches). Ohne sie blieb die Marke für die Lebensdauer des Tabs stehen und die
+        // nächste schlicht abgelaufene Sitzung las „Anmeldung konnte nicht übernommen werden“.
+        clearLoginBounce()
         set({ user: me.user, editorBoot: false, ready: true })
       } catch (e) {
         // B&S: Beim 401 geht die Seite weg (Login). Nur wenn die Weiterleitung geblockt ist
@@ -707,6 +790,7 @@ export const useStore = create((set, get) => {
     // nach einem Konflikt. `rev` ist der Stand, gegen den der nächste Push geschrieben wird.
     applyStand(res, fallbackId) {
       const { user, state, rev } = res || {}
+      letzteVerwerfung = ''   // frischer Stand → die Hinweise dürfen wieder kommen
       const S = forcePrefs(Object.assign(clone(DEF), state || {}))
       S.active = null   // die laufende Einheit gehört dem Gerät des Mitglieds
       registerCustom(S.customEx)
@@ -725,11 +809,24 @@ export const useStore = create((set, get) => {
       if (!ed) return
       clearTimeout(pushTm)
       pushTm = null
-      set({ editorSave: 'saving' })
+      // B&S: 'loading'/'reload-error' und nicht 'saving'/'error' — hier wird geladen, nicht
+      // gespeichert. Das Banner bot sonst „Fehler beim Speichern — erneut versuchen“ an, und
+      // dieser Knopf pushte den bewusst verworfenen Plan mit stale editorRev: garantiert
+      // wieder 409, also ein Pendeln zwischen zwei falschen Meldungen ohne Ausweg.
+      const vorher = get().S
+      set({ editorSave: 'loading' })
       try {
-        get().applyStand(await api('/api/trainer/stand?user=' + encodeURIComponent(ed.userId)), ed.userId)
+        const stand = await api('/api/trainer/stand?user=' + encodeURIComponent(ed.userId))
+        // Während des Ladens ist die Oberfläche bedienbar. Eine Änderung von eben wird jetzt
+        // überschrieben — das wird gesagt, und der dafür armierte Push wird geräumt, damit er
+        // nicht 1,5 s später den gerade geladenen Stand zurückschickt.
+        const dazwischen = get().S !== vorher
+        get().applyStand(stand, ed.userId)
+        clearTimeout(pushTm)
+        pushTm = null
+        if (dazwischen) hinweis('Der Plan wurde neu geladen — deine Änderung von eben ist dabei verloren gegangen.')
       } catch (e) {
-        set({ editorSave: 'error' })
+        set({ editorSave: 'reload-error' })
       }
     },
 
@@ -748,7 +845,10 @@ export const useStore = create((set, get) => {
       // deckt diesen Nachzügler mit ab (siehe pushState), damit das Banner vor dem Verlassen
       // der Seite wirklich den letzten Stand meldet. Beim Entladen (keepalive) wird nicht
       // gewartet — dafür ist keine Zeit mehr.
-      if (planPushing && !opts.keepalive) { planPushAgain = true; return planPushing.then(() => planPushing) }
+      // B&S: Die Sperre gilt AUCH für den Abschieds-Push (keepalive). Ohne das ging beim
+      // Tab-Wechsel ein zweiter PUT mit demselben baseRev raus, der Verlierer bekam 409 und
+      // der Coach las „Ein anderer Coach hat den Plan geändert“ — es gab keinen anderen.
+      if (planPushing) { planPushAgain = true; return planPushing.then(() => planPushing) }
       const S = get().S
       const routines = Array.isArray(S.routines) ? S.routines : []
       const used = new Set()
@@ -770,8 +870,11 @@ export const useStore = create((set, get) => {
         routines, week: S.week || {}, customEx, namen,
         ...(Number.isFinite(baseRev) ? { baseRev } : {})
       })
-      // keepalive trägt höchstens 64 KB; ein größerer Plan geht als normaler Request raus.
-      const keepalive = !!opts.keepalive && body.length < 60000
+      // keepalive trägt höchstens 64 KB — in BYTES. `body.length` zählt UTF-16-Einheiten, ein
+      // Plan voller Umlaute und Gedankenstriche passte damit scheinbar und der Browser wies
+      // den Request beim Entladen mit einem TypeError ab. Ein größerer Plan geht als normaler
+      // Request raus; dass er dabei abbrechen kann, fängt der beforeunload-Hinweis oben.
+      const keepalive = !!opts.keepalive && new TextEncoder().encode(body).byteLength < 60000
       const run = (async () => {
         try {
           const r = await api('/api/trainer/plan?user=' + encodeURIComponent(ed.userId), {
@@ -780,18 +883,20 @@ export const useStore = create((set, get) => {
             ...(keepalive ? { keepalive: true } : {})
           })
           set({ editorSave: 'saved', ...(Number.isFinite(r?.rev) ? { editorRev: r.rev } : {}) })
+          sagWasVerworfenWurde(r)
         } catch (e) {
           // B&S: 409 = der andere Coach war schneller. Kein zweiter Versuch — zwei Pläne lassen
           // sich nicht zusammenführen; das Banner bietet an, den Plan neu zu laden (reloadPlan).
           set({ editorSave: e.status === 409 ? 'conflict' : 'error' })
         }
       })()
-      if (keepalive) return run
       planPushing = run.finally(() => {
         planPushing = null
         if (planPushAgain) { planPushAgain = false; get().pushPlan() }
       })
-      return planPushing
+      // Beim Entladen wartet niemand auf einen Nachzügler — die Sperre selbst gilt trotzdem,
+      // sonst rennt der nächste normale Push neben dem keepalive-PUT mit demselben baseRev.
+      return keepalive ? run : planPushing
     }
   }
 })

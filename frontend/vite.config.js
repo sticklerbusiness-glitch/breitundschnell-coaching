@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
@@ -22,10 +22,27 @@ const DATASET = 'https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455e
 process.env.VITE_IMG_BASE = process.env.VITE_IMG_BASE || DATASET + 'images/'
 process.env.VITE_GIF_BASE = process.env.VITE_GIF_BASE || DATASET + 'videos/'
 
+// B&S: Jede gebaute Datei außer der Hülle und dem Worker selbst, Pfade relativ zum Worker
+// (der liegt neben der index.html). Das ist die Precache-Liste des Service Workers: aus der
+// gebauten index.html ließe sie sich nicht lesen, dort stehen nur der Eintritts-Chunk und das
+// CSS — die deutschen Sprachpakete sind eigene, nachgeladene Chunks.
+function bauDateien(dir, praefix = '') {
+  const raus = []
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const rel = praefix + e.name
+    if (e.isDirectory()) raus.push(...bauDateien(resolve(dir, e.name), rel + '/'))
+    else if (rel !== 'index.html' && rel !== 'sw.js') raus.push(rel)
+  }
+  return raus
+}
+
 // The service worker's cache is named after the build (public/sw.js carries a `__BUILD__`
 // placeholder): a deploy is then a new worker with its own cache, and the previous build's
 // shell and chunks are dropped on activate instead of piling up under one fixed name. The
 // stamp is a hash of the built index.html — it changes exactly when the bundle does.
+// Dazu die Liste der gebauten Dateien in den zweiten Platzhalter `__ASSETS__`: ohne sie
+// precacht der Worker nur, was die index.html verlinkt, und ein Mitglied im Keller bekommt
+// eine englische Oberfläche, weil die deutschen Pakete offline fehlen.
 // B&S: Der Ordner kommt aus der aufgelösten Konfiguration, nicht mehr fest aus
 // './dist/training/'. Vorher hat jeder Build mit eigenem --outDir den Stempel
 // still übersprungen und einen Worker mit dem Platzhalter ausgeliefert: alle
@@ -48,8 +65,22 @@ export function swStamp() {
       if (!roh.includes('__BUILD__')) {
         throw new Error(`sw-stamp: Kein Platzhalter __BUILD__ in ${sw} — jeder Deploy bekäme denselben Cache-Namen.`)
       }
+      if (!roh.includes('__ASSETS__')) {
+        throw new Error(`sw-stamp: Kein Platzhalter __ASSETS__ in ${sw} — der Worker precacht dann nichts und die App wäre offline englisch.`)
+      }
+      const dateien = bauDateien(dir)
+      if (!dateien.some(n => n.endsWith('.js'))) {
+        throw new Error(`sw-stamp: Keine einzige .js-Datei unter ${dir} — die Precache-Liste wäre leer.`)
+      }
+      // Die Liste steht kommagetrennt in sw.js (eine Zeichenkette, kein JSON — so bleibt die
+      // Datei auch ungestempelt gültiges Javascript). Namen mit Komma oder Anführungszeichen
+      // würden sie zerreißen; Vite vergibt solche nicht, eine Datei aus public/ könnte es.
+      const schlecht = dateien.filter(n => /["',\n\r\\]/.test(n))
+      if (schlecht.length) {
+        throw new Error(`sw-stamp: Dateiname mit Komma oder Anführungszeichen: ${schlecht.join(' | ')} — die Precache-Liste in sw.js ist kommagetrennt.`)
+      }
       const stamp = createHash('sha256').update(readFileSync(html)).digest('hex').slice(0, 10)
-      writeFileSync(sw, roh.replaceAll('__BUILD__', stamp))
+      writeFileSync(sw, roh.replaceAll('__BUILD__', stamp).replaceAll('__ASSETS__', dateien.join(',')))
     }
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore } from './store/useStore.js'
+import { MEMBER_EX_HINT, useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, smOf, matchExercise, exOr } from './lib/exercises.js'
 import { activeProfile, exAvailable, ALL_EQUIPMENT, newProfile } from './lib/equipment.js'
@@ -39,7 +39,7 @@ import { buildCombinedEntries, deriveSessionName } from './lib/session-merge.js'
 import { workoutsOn, backfillStart, backfillEnd, completeBackfill } from './lib/backfill.js'
 // B&S: only the coaches own the plan (routines + week). Everything that writes into them is
 // gated on the editor mode; a member's app just logs what the plan says.
-import { planEditable, usePlanEditable } from './lib/editor-mode.js'
+import { editorMode, planEditable, useEditorMode, usePlanEditable } from './lib/editor-mode.js'
 import { youtubeId } from './lib/youtube.js'
 import YouTube from './components/YouTube.jsx'
 
@@ -646,9 +646,12 @@ function OneRM({ ex }) {
 function ExerciseDetail({ ex, close }) {
   const st = useStore(s => s.S)
   const editable = usePlanEditable()   // B&S: only a coach puts an exercise into the plan
-  // B&S: kommt die Übung aus dem Plan, gehört sie dem Coach — `editable` oben hängt den
-  // Store-Abo dran, damit der Wechsel in den Editor neu rendert.
-  const coachOwned = coachOwnsEx(st, ex)
+  // B&S: Der Stern, das Hantelstangen-Gewicht und die Wiegung gehören dem Mitglied — im
+  // eigenen Bereich eines Coaches also weiterhin ihm selbst, nur im Editor nicht.
+  const imEditor = useEditorMode()
+  // B&S: kommt die Übung aus dem Plan, gehört sie dem Coach — `editable`/`imEditor` oben hängen
+  // den Store-Abo dran, damit der Wechsel in den Editor neu rendert.
+  const gesperrt = exLockHint(st, ex)
   const last = lastEntryFor(st, ex.id)
   const best = bestWeightFor(st, ex.id)
   const fav = isFav(st, ex.id)
@@ -662,7 +665,7 @@ function ExerciseDetail({ ex, close }) {
       <h3 className="capitalize">{exerciseNameFor(ex)}</h3>
       {/* B&S: Der Stern ist eine Markierung des Mitglieds. Im Plan-Editor nimmt der Store keine
           solche Änderung an — der Knopf würde also nur eine Meldung zeigen und nichts tun. */}
-      {!editable && <button className={'iconbtn fav-btn' + (fav ? ' on' : '')} aria-pressed={fav}
+      {!imEditor && <button className={'iconbtn fav-btn' + (fav ? ' on' : '')} aria-pressed={fav}
         aria-label={fav ? t('Remove from favourites') : t('Add to favourites')} onClick={flipFav}>
         <Icon name={fav ? 'starFill' : 'star'} />
       </button>}
@@ -679,13 +682,16 @@ function ExerciseDetail({ ex, close }) {
     {editable && <Button variant="primary" icon="plus" style={{ margin: '10px 0 4px' }} onClick={() => addToRoutineSheet(ex)}>{t('Add to my plan')}</Button>}
     {last && <Button icon="history" style={{ marginTop: 4 }} onClick={() => exerciseHistorySheet(ex.id)}>{t('History')}</Button>}
     {/* B&S: Übungen, die über den Plan kommen, gehören dem Coach — das Mitglied liest sie nur. */}
-    {ex.custom && (coachOwned
-      ? <div className="small dim" style={{ marginTop: 10, lineHeight: 1.45 }}>{COACH_EX_HINT}</div>
+    {ex.custom && (gesperrt
+      ? <div className="small dim" style={{ marginTop: 10, lineHeight: 1.45 }}>{gesperrt}</div>
       : <div className="row" style={{ gap: 8, marginTop: 8 }}>
         <Button icon="pencil" style={{ flex: 1 }} onClick={() => { close(); customExSheet(ex) }}>{t('Edit')}</Button>
         <Button variant="danger" icon="trash" style={{ flex: 1 }} onClick={() => deleteCustomEx(ex, close)}>{t('Delete')}</Button>
       </div>)}
-    {usesBar(ex) && <>
+    {/* B&S: Das Stangengewicht steht in s.barWeights und gehört dem Mitglied — im Editor
+        nimmt der Store die Änderung nicht an, der Stepper bewegte sich nie und warf pro
+        Tipp einen Toast. */}
+    {usesBar(ex) && !imEditor && <>
       <h4 className="sec">{t('Bar weight')}</h4>
       <BarWeightEditor ex={ex} extra={t('You still log the total weight — the bar only feeds the per-side plate math.')} />
     </>}
@@ -830,7 +836,10 @@ function CustomExForm({ existing, prefill, onDone, close }) {
   return <>
     <h3>{existing ? t('Edit custom exercise') : t('Create your own exercise')}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Name it and pick a body part — it behaves like any other exercise, just without an animation.')}</div>
-    <input ref={nameRef} className="input" placeholder={t('Exercise name')} value={n} onFocus={onNameFocus} onChange={e => setN(e.target.value)} />
+    {/* B&S: 120 wie lib/plan.js MAX_NAME. Der Server KÜRZT einen längeren Namen still und
+        antwortet 200 — ohne dieselbe Grenze im Feld tippt der Coach weiter, liest
+        „Gespeichert“ und findet beim nächsten Laden einen anderen Namen. */}
+    <input ref={nameRef} className="input" maxLength={120} placeholder={t('Exercise name')} value={n} onFocus={onNameFocus} onChange={e => setN(e.target.value)} />
     <div className="chips" style={{ margin: '12px 0' }}>
       {BODYPARTS.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => setBp(b)}>{t(b)}</button>)}
     </div>
@@ -859,7 +868,8 @@ function CustomExForm({ existing, prefill, onDone, close }) {
 export const customExSheet = (existing, onDone, prefill) => {
   // B&S: Eine Übung aus dem Plan des Coaches lässt sich hier nicht bearbeiten — die Umbenennung
   // würde beim nächsten Sync stillschweigend verworfen. Lieber gar nicht erst aufmachen.
-  if (coachOwnsEx(S(), existing)) { toast(COACH_EX_HINT); return }
+  const gesperrt = exLockHint(S(), existing)
+  if (gesperrt) { toast(gesperrt); return }
   ui().openSheet(close => <CustomExForm existing={existing} prefill={prefill} onDone={onDone} close={close} />)
 }
 
@@ -880,14 +890,27 @@ export const customExSheet = (existing, onDone, prefill) => {
  * Arbeitsgewicht (exWeights) und der Favoriten-Stern wären endgültig weg.
  * ---------------------------------------------------------------------------------------- */
 const usedByRoutine = (st, exId) => !!exId && (st.routines || []).some(r => (r.ex || []).some(e => e.id === exId))
-export const coachOwnsEx = (st, ex) =>
-  !!(ex && ex.custom) && !planEditable() && (ex.src === 'coach' || usedByRoutine(st, ex.id))
+// Gehört dieser Eintrag zum PLAN? Entweder der Coach hat ihn selbst angelegt (`src:'coach'`)
+// oder eine Routine benutzt ihn. Dieselbe Frage, aus beiden Richtungen gelesen.
+const planOwnsEx = (st, ex) => !!(ex && ex.custom) && (ex.src === 'coach' || usedByRoutine(st, ex.id))
+export const coachOwnsEx = (st, ex) => !planEditable() && planOwnsEx(st, ex)
+/* B&S: Die Gegenrichtung. Im Plan-Editor liegt auch der Übungs-Katalog des MITGLIEDS auf dem
+   Schirm. Was nicht zum Plan gehört, gehört ihm: pushPlan filtert es weg (nur benutzte oder
+   `src:'coach'` fahren mit) und der Server verwirft es (lib/state.js: coachOwnedCustomEx).
+   Umbenennen oder löschen stand also auf dem Schirm, ging nie an den Server, und das Banner
+   meldete trotzdem „Gespeichert“. */
+export const memberOwnsEx = (st, ex) => editorMode() && !!(ex && ex.custom) && !planOwnsEx(st, ex)
 export const COACH_EX_HINT = 'Diese Übung gehört zu deinem Trainingsplan — angelegt hat sie dein Coach. Ändern oder löschen kann sie nur er.'
+export { MEMBER_EX_HINT }
+/** Die Erklärung, warum diese eigene Übung hier nur lesbar ist — oder null. */
+export const exLockHint = (st, ex) => coachOwnsEx(st, ex) ? COACH_EX_HINT : memberOwnsEx(st, ex) ? MEMBER_EX_HINT : null
 
 export function deleteCustomEx(ex, afterDelete) {
   if (S().active?.entries.some(e => e.id === ex.id)) { toast(t('Finish your current workout first')); return }
-  // B&S: letzter Riegel, falls doch ein Knopf durchrutscht — nie die Plan-Übung eines Coaches.
-  if (coachOwnsEx(S(), ex)) { toast(COACH_EX_HINT); return }
+  // B&S: letzter Riegel, falls doch ein Knopf durchrutscht — nie die Plan-Übung eines Coaches
+  // und im Editor nie die eigene Übung des Mitglieds.
+  const gesperrt = exLockHint(S(), ex)
+  if (gesperrt) { toast(gesperrt); return }
   confirmSheet({
     title: t('Delete “{0}”?', ex.n),
     // B&S: a member's own exercise never reaches back into the coaches' routines.
@@ -1184,6 +1207,10 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit, perSide }) {
 function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
   const st = useStore(s => s.S)
   const editable = usePlanEditable()   // B&S: the coach's fields (video, Coach-Tipp input)
+  const imEditor = useEditorMode()     // B&S: s.barWeights gehört dem Mitglied (siehe ExerciseDetail)
+  // B&S: Warum diese eigene Übung hier nur lesbar ist — oder null. `editable`/`imEditor` oben
+  // halten das Store-Abo, exLockHint selbst liest den Store ohne Hook.
+  const gesperrt = exLockHint(st, ex)
   const cardio = isCardio(ex.id)
   const seed = existing || initial || defaultConfig(ex.id)
   const [c, setC] = useState(() => {
@@ -1419,7 +1446,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
     </>}
     {/* The bar's own weight, for the plate math — per exercise, not per plan, so it sits
         apart from the config fields above and writes straight to S.barWeights. */}
-    {usesBar(ex) && <>
+    {usesBar(ex) && !imEditor && <>
       <h4 className="sec">{t('Bar weight')}</h4>
       <BarWeightEditor ex={ex} extra={t('Applies to this exercise everywhere, not just this plan.')} />
     </>}
@@ -1443,8 +1470,8 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
     </>}
     <Button variant="primary" disabled={progressionStepInvalid} onClick={save}>{existing ? t('Save') : t('Add to routine')}</Button>
     {/* B&S: Plan-Übungen des Coaches bleiben für das Mitglied unangetastet (siehe coachOwnsEx). */}
-    {ex.custom && (coachOwnsEx(st, ex)
-      ? <div className="small dim" style={{ marginTop: 10, lineHeight: 1.45 }}>{COACH_EX_HINT}</div>
+    {ex.custom && (gesperrt
+      ? <div className="small dim" style={{ marginTop: 10, lineHeight: 1.45 }}>{gesperrt}</div>
       : <><div style={{ height: 8 }} /><Button icon="pencil" onClick={() => { close(); customExSheet(ex) }}>{t('Edit or delete this exercise')}</Button></>)}
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { close(); onDelete() }}>{t('Remove from routine')}</Button></>}
   </>
@@ -1542,11 +1569,14 @@ function PlanTools({ close }) {
   const st = useStore(s => s.S)
   const user = useStore(s => s.user)
   const editable = usePlanEditable()   // B&S: importing a plan file writes routines + week
+  // B&S: Im Editor ist `user` der COACH — Datei und Ausdruck trugen seinen Namen, obwohl der
+  // Plan dem Mitglied gehört und der Ausdruck bei ihm landet.
+  const planName = useStore(s => s.editor?.name) || user?.name || ''
   const fileRef = useRef(null)
   const hasRoutines = (st.routines || []).some(r => r.ex && r.ex.length)
 
   const exportFile = async () => {
-    const bundle = buildPlanBundle(st, user?.name ? t('{0}’s plan', user.name) : '')
+    const bundle = buildPlanBundle(st, planName ? t('{0}’s plan', planName) : '')
     const json = JSON.stringify(bundle, null, 2)
     const name = 'bs-plan-' + todayISO() + '.json'   // B&S
     if (MOBILE) { try { await shareExport(json, name) } catch (e) { /* dismissed */ } close(); return }
@@ -1574,8 +1604,8 @@ function PlanTools({ close }) {
       close()
       // Web: the browser's print dialog (→ Save as PDF). Mobile: the OS print flow via the
       // native Print plugin — Android WebView has no window.print(). Same printable HTML both ways.
-      if (MOBILE) printHtml(planPrintHTML(st, user?.name || ''), t('Weekly Training Plan')).catch(() => { /* dismissed */ })
-      else printPlan(st, user?.name || '')
+      if (MOBILE) printHtml(planPrintHTML(st, planName), t('Weekly Training Plan')).catch(() => { /* dismissed */ })
+      else printPlan(st, planName)
     }} disabled={!hasRoutines}>{t('Print / Save as PDF')}</Button>
     <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>{t('A clean one-page-per-plan printout — no exercise ever splits across a page.')}</div>
     {!hasRoutines && <div className="dim small" style={{ margin: '12px 2px 0' }}>{t('Add an exercise to a routine first — an empty plan has nothing to share.')}</div>}
@@ -1716,7 +1746,7 @@ function WorkoutDetail({ w, close }) {
   // B&S: Im Plan-Editor steht hier die Einheit des MITGLIEDS. Sie gehört ihm — der Store nimmt
   // im Editor ohnehin nur Plan-Änderungen an, also wäre „Workout löschen“ ein Knopf, der eine
   // Löschung meldet, die nie passiert. Der Coach liest die Einheit samt Notiz, mehr nicht.
-  const readOnly = usePlanEditable()
+  const readOnly = useEditorMode()
   // The session note is editable here rather than only at the finish sheet: what you want to
   // record about a session is often clearer once you have looked at what you actually did.
   const [note, setNote] = useState(w.note || '')

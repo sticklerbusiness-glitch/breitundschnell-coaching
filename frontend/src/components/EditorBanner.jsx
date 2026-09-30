@@ -17,7 +17,7 @@ const retryBtn = {
   border: 0, borderRadius: 8, padding: '3px 9px', cursor: 'pointer'
 }
 
-const STATUS = { saving: 'Speichert …', saved: 'Gespeichert' }
+const STATUS = { saving: 'Speichert …', saved: 'Gespeichert', loading: 'Lädt …' }
 
 // B&S: Der Fehlerfall legt sich über ALLES — die Routen, die Tab-Leiste, die Sheets. Als
 // bloßes Geschwister der Routen (so war es) schob der Fehlerblock die volle App nur unter den
@@ -66,7 +66,11 @@ export default function EditorBanner() {
             </>
           : editorSave === 'error'
             ? <button type="button" style={retryBtn} onClick={() => pushPlan()}>Fehler beim Speichern — erneut versuchen</button>
-            : <span style={{ opacity: .85, fontWeight: 500 }}>{STATUS[editorSave] || ''}</span>}
+            /* B&S: Gescheitert ist das LADEN, nicht das Speichern. Der Speichern-Knopf schickte
+               hier den bewusst verworfenen Plan mit stale editorRev los — garantiert wieder 409. */
+            : editorSave === 'reload-error'
+              ? <button type="button" style={retryBtn} onClick={() => reloadPlan()}>Plan konnte nicht geladen werden — erneut laden</button>
+              : <span style={{ opacity: .85, fontWeight: 500 }}>{STATUS[editorSave] || ''}</span>}
         {/* B&S: Erst speichern, dann weg. Ein einfacher Link würde die Seite verlassen, während
             die letzte Änderung noch in der 1,5-Sekunden-Sammlung liegt. */}
         <a
