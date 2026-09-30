@@ -128,6 +128,47 @@ describe('bootEditor und die Login-Schleifen-Marke', () => {
   })
 })
 
+// B&S: Der Trainer will in die App und nimmt den einzigen Link, den die Doku für
+// Coaches nennt — /training?kunde=<id>#/plan — und setzt seine EIGENE Kennung ein.
+// Der Server sagt dazu „coach target“ (409): ein Coach hat keinen vom Coach
+// geschriebenen Plan. Früher stand dann „Mitglied nicht gefunden.“ über der ganzen
+// App, mit einem einzigen Ausweg zurück auf die Website.
+describe('ein Coach als Ziel im Editor-Link', () => {
+  // B&S: `coach.id` der übrigen Tests ('coach-1') taugt hier nicht — der Bindestrich ist im
+  // Editor-Link gar nicht erlaubt (readEditorParam: [a-z0-9]{10,40}), der Link liefe also am
+  // Editor vorbei und der Test prüfte nichts. Echte Kennungen sind cuids, so wie diese.
+  const coachSelbst = { id: 'coach1234567', name: 'Valentin', coach: true }
+
+  it('landet im eigenen Trainingsbereich statt in der Sackgasse', async () => {
+    localStorage.setItem('gym_state_v1', JSON.stringify(ownProfile))
+    localStorage.setItem('gym_owner', coachSelbst.id)
+    localStorage.setItem('gym_user', JSON.stringify(coachSelbst))
+    localStorage.setItem('gym_sync', JSON.stringify({ rev: 9, ts: 42 }))
+    history.replaceState({}, '', '/training/?kunde=' + coachSelbst.id + '#/plan')
+    api.mockImplementation(async (path, opts) => {
+      if (path === '/api/me') return { user: coachSelbst }
+      if (path.startsWith('/api/trainer/stand')) throw Object.assign(new Error('coach target'), { status: 409 })
+      if (path === '/api/data' && opts?.method !== 'PUT') return { state: clone(ownProfile), rev: 9 }
+      if (path === '/api/data') return { ok: true, rev: 10 }
+      throw Object.assign(new Error('unexpected ' + path), { status: 500 })
+    })
+
+    await useStore.getState().boot()
+    await tick()
+
+    expect(useStore.getState().editorError).toBeNull()
+    expect(useStore.getState().editor).toBeNull()
+    expect(useStore.getState().editorBoot).toBe(false)
+    expect(useStore.getState().ready).toBe(true)
+    expect(useStore.getState().user).toEqual(coachSelbst)
+    // Sein eigenes Profil, nicht ein leeres Vorgabe-Dokument.
+    expect(useStore.getState().S.routines).toEqual(ownProfile.routines)
+    // und der Parameter ist aus der Adresse, sonst fällt der nächste Start wieder hinein
+    expect(location.search).not.toContain('kunde')
+    expect(toast).toHaveBeenCalled()
+  })
+})
+
 describe('Plan neu laden', () => {
   it('meldet einen Ladefehler als Ladefehler, nicht als Speicherfehler', async () => {
     asCoach()

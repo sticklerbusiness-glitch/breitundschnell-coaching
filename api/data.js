@@ -72,12 +72,17 @@ async function write(req, res) {
   // Ergebnis wie ein falscher baseRev — der Client liest neu und mergt.
   if (rev == null) return conflict(res, await getStand(ctx.sql, ctx.user.id), selfOwned);
 
-  // `plan` fährt immer mit: der Client hat routines/week gerade lokal
-  // verändert oder geleert und setzt sie damit sofort wieder auf den Stand
-  // des Coaches, ohne auf den nächsten GET zu warten. B&S: Beim Coach ist das
-  // sein eigener, gerade gespeicherter Plan — der Client übernimmt also genau
-  // das, was er geschickt hat, statt ihn zu leeren.
-  json(res, 200, { ok: true, ts: state._ts ?? null, rev, plan: planPayload(selfOwned ? daten : plan) });
+  // `plan` fährt für das MITGLIED mit: sein Client hat routines/week gerade
+  // lokal verändert oder geleert und setzt sie damit sofort wieder auf den
+  // Stand des Coaches, ohne auf den nächsten GET zu warten.
+  //
+  // B&S: Dem Coach schicken wir ihn NICHT zurück. Es wäre sein eigener, gerade
+  // gespeicherter Stand — und der ist schon alt, sobald er während der
+  // Antwortzeit weitergetippt hat: applyPlan() im Client überschriebe die neue
+  // Änderung mit der eben gesendeten, und der nächste Push schriebe die
+  // Rückwärts-Änderung auch noch fest. Ohne `plan` steigt applyPlan() sofort
+  // aus (useStore.js: `if (!plan) return`) und der Coach behält, was er tippt.
+  json(res, 200, { ok: true, ts: state._ts ?? null, rev, ...(selfOwned ? {} : { plan: planPayload(plan) }) });
 }
 
 function conflict(res, row, selfOwned) {

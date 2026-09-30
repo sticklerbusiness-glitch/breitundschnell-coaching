@@ -746,26 +746,34 @@ export const useStore = create((set, get) => {
       // einem leeren Vorgabe-Profil, und ein einziger Tipper darin überschreibt das gespeicherte
       // Profil des Coaches im localStorage (und pusht es später in sein eigenes Konto).
       set({ editorBoot: true })
+      // B&S: außerhalb des try, weil auch der Fehlerzweig wissen muss, wer da ist.
+      let me = null
+      // Raus aus dem Editor, rein in den eigenen Bereich: Parameter aus der Adresse, eigenes
+      // Profil aus dem localStorage, dann der normale Weg. Zwei Wege führen hierher — ein
+      // Mitglied mit einem Coach-Link, und ein Coach, der ein Coach-Ziel eingesetzt hat.
+      const eigenerBereich = async text => {
+        dropEditorParam()
+        const own = loadState()
+        registerCustom(own.customEx)
+        set({
+          S: own,
+          editorBoot: false,
+          editorError: null,
+          sync: { ...get().sync, pending: localStorage.getItem('gym_dirty') === '1' }
+        })
+        get().setUser(me.user)
+        hinweis(text)
+        await get().pullState()
+        finishBoot()
+      }
       try {
-        const me = await api('/api/me')
+        me = await api('/api/me')
         if (!me.user?.coach) {
           // B&S: Kein Coach — dieser Link gehört ihm nicht. Früher blieb er auf einem
           // Fehlerbildschirm stehen, unter dem die volle App weiterlief: alles bedienbar,
           // nichts gespeichert, das protokollierte Workout beim Neuladen weg. Stattdessen
           // fliegt der Parameter aus der Adresse und er landet in seinem eigenen Bereich.
-          dropEditorParam()
-          const own = loadState()
-          registerCustom(own.customEx)
-          set({
-            S: own,
-            editorBoot: false,
-            sync: { ...get().sync, pending: localStorage.getItem('gym_dirty') === '1' }
-          })
-          get().setUser(me.user)
-          hinweis('Dieser Link ist für Coaches — du siehst hier deinen eigenen Trainingsbereich.')
-          await get().pullState()
-          finishBoot()
-          return
+          return await eigenerBereich('Dieser Link ist für Coaches — du siehst hier deinen eigenen Trainingsbereich.')
         }
         // `user` erst jetzt: bis hierher hält App.jsx den Ladebildschirm.
         const stand = await api('/api/trainer/stand?user=' + encodeURIComponent(userId))
@@ -782,6 +790,14 @@ export const useStore = create((set, get) => {
         // rendert views/Login.jsx mit dem Fehlertext. `editorBoot` bleibt gesetzt, damit auch
         // dann nichts in den localStorage des Coaches läuft.
         if (e.status === 401) { if (!redirectToLogin()) set({ ready: true }); return }
+        // B&S: 409 heißt „das Ziel ist selbst ein Coach“ (api/trainer/stand.js). Fast immer hat
+        // sich ein Trainer die eigene Kennung in den Link gesetzt, weil das der einzige Weg ist,
+        // den die Doku für Coaches nennt. Das ist kein Fehler, den man ihm vorhalten muss:
+        // Coaches schreiben ihren Plan direkt in der App — also dorthin, statt auf einen
+        // Fehlerbildschirm, dessen einziger Ausweg zurück auf die Website führt.
+        if (e.status === 409 && me?.user) {
+          return await eigenerBereich('Coaches haben keinen Plan vom Coach — deinen eigenen legst du hier direkt an.')
+        }
         set({ editorBoot: false, editorError: e.status === 404 ? 'Mitglied nicht gefunden.' : 'Der Plan konnte nicht geladen werden.', ready: true })
       }
     },

@@ -20,7 +20,14 @@ export default async function handler(req, res) {
     const target = query(req).get('user');
     if (!isUserId(target)) return notFound(res);
     const member = await findUser(ctx.sql, target);
-    if (!member || !planGehoertDemCoach(member)) return notFound(res);
+    // Wen es nicht gibt, gibt es nicht — das verrät am wenigsten über die
+    // Mitgliederliste. B&S: Ein COACH als Ziel ist aber etwas anderes, und
+    // dieselbe Antwort war hier eine falsche Auskunft: Wer sich selbst in
+    // ?kunde= einsetzt, las „Mitglied nicht gefunden" und stand in einer
+    // Sackgasse ohne Weg in seinen eigenen Trainingsbereich. Fragen darf hier
+    // ohnehin nur ein angemeldeter Coach, also ist die Unterscheidung frei.
+    if (!member) return notFound(res);
+    if (!planGehoertDemCoach(member)) return json(res, 409, { error: 'coach target' });
 
     const body = await readJson(req, LIMITS.plan);
     const checked = validatePlan(body);
