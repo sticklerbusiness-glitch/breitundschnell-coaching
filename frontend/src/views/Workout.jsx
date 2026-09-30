@@ -524,6 +524,8 @@ export function removeActiveExercise(idx) {
 }
 
 function ActiveWorkout() {
+  // B&S: Im Plan-Editor schaut ein Coach auf fremde Daten — der Hinweis gilt dem Mitglied.
+  const bearbeitet = useEditorMode()
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
@@ -977,6 +979,14 @@ function ActiveWorkout() {
     <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
     </div>
     {A.backfill && <div className="muted small" style={{ marginBottom: 8 }}>{t('Logging a past workout — no rest timers.')}</div>}
+    {/* B&S: Anpassen ist ausdrücklich erlaubt — Gerät besetzt, Schulter zwickt, Zeit knapp.
+        Der Satz sagt beides: du darfst, und es bleibt nicht unbemerkt. Ohne ihn tauschen
+        Mitglieder still Übungen und wundern sich, warum der Coach nachfragt. */}
+    {!bearbeitet && !A.backfill && (
+      <div className="muted small" style={{ marginBottom: 8 }}>
+        Du kannst die Einheit anpassen — Übungen tauschen, weglassen oder dazunehmen. Dein Coach sieht die Änderung.
+      </div>
+    )}
 
     {A.entries.length ? (listMode ? (
       <div className="workout-list" data-testid="workout-list">
