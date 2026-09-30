@@ -120,7 +120,13 @@ describe('Backup einspielen behält die Übungen des Coaches', () => {
     })
     await act(async () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
-      await new Promise(r => setTimeout(r, 10))
+      // B&S: Der FileReader ist asynchron — eine feste Wartezeit reicht unter Last nicht und
+      // machte den Test in der vollen Suite sporadisch rot. Warten, BIS die Datei verarbeitet
+      // ist (Nachfrage-Sheet oder Fehler-Toast), höchstens zwei Sekunden.
+      const frist = Date.now() + 2000
+      while (Date.now() < frist && !mocks.confirmSheet.mock.calls.length && !mocks.toast.mock.calls.length) {
+        await new Promise(r => setTimeout(r, 5))
+      }
     })
   }
 
@@ -153,7 +159,13 @@ describe('im Plan-Editor bleiben die zerstörenden Wege zu', () => {
     })
     await act(async () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
-      await new Promise(r => setTimeout(r, 10))
+      // B&S: Der FileReader ist asynchron — eine feste Wartezeit reicht unter Last nicht und
+      // machte den Test in der vollen Suite sporadisch rot. Warten, BIS die Datei verarbeitet
+      // ist (Nachfrage-Sheet oder Fehler-Toast), höchstens zwei Sekunden.
+      const frist = Date.now() + 2000
+      while (Date.now() < frist && !mocks.confirmSheet.mock.calls.length && !mocks.toast.mock.calls.length) {
+        await new Promise(r => setTimeout(r, 5))
+      }
     })
     expect(mocks.confirmSheet).not.toHaveBeenCalled()
     expect(mocks.replaceState).not.toHaveBeenCalled()
