@@ -19,7 +19,7 @@ export default function TabBar({ onStart }) {
   if (!user) return null
   const cur = loc.pathname.split('/')[1] || 'home'
   // B&S: `kalorien` hängt an Start — die Ansicht wird von dort geöffnet und hat keinen eigenen Platz.
-  const on = k => cur === k || (cur === 'history' && k === 'stats') || (cur === 'settings' && k === 'home') || (cur === 'kalorien' && k === 'home') || (cur === 'muscles' && k === 'library')
+  const on = k => cur === k || (cur === 'history' && k === 'stats') || (cur === 'settings' && k === 'home') || (cur === 'kalorien' && k === 'home') || (cur === 'check-in' && k === 'home') || (cur === 'muscles' && k === 'library')
 
   const startWorkout = () => {
     if (!S.active) {

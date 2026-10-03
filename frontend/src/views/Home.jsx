@@ -13,6 +13,7 @@ import { glyphOf } from '../lib/glyphs.js'
 import { useEditorMode, usePlanEditable } from '../lib/editor-mode.js'
 import { APP_NAME } from '../lib/brand.js'
 import KalorienKachel from '../components/KalorienKachel.jsx'
+import CheckInKachel from '../components/CheckInKachel.jsx'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -175,6 +176,7 @@ export default function Home() {
     {/* B&S: Kalorien — im Plan-Editor nicht: dort schaut ein Coach auf den Stand eines
         Mitglieds, und dessen Ernährung trägt er nicht ein. */}
     {!imEditor && <KalorienKachel />}
+    {!imEditor && <CheckInKachel />}
 
     <div className={imEditor ? 'card' : 'card tappable'} style={imEditor ? undefined : { cursor: 'pointer' }} {...(imEditor ? {} : tappable(() => calendarSheet()))}>
       <div className="row between">

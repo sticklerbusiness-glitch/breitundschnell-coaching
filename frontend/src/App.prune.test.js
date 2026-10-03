@@ -9,12 +9,15 @@ const source = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8')
 
 describe('App-Shell — Routen', () => {
   it('führt genau die Screens, die Mitglieder und Coaches brauchen', () => {
-    for (const path of ['/home', '/plan', '/plan/r/:id', '/workout', '/stats', '/history', '/library', '/muscles', '/kalorien', '/settings']) {
+    for (const path of ['/home', '/plan', '/plan/r/:id', '/workout', '/stats', '/history', '/library', '/muscles', '/kalorien', '/check-in', '/settings']) {
       expect(source, path).toContain(`path="${path}"`)
     }
   })
 
-  it('kennt weder Check-in noch Coach- oder Admin-Screens', () => {
+  // B&S: Gemeint ist openGyms Check-in — die Mitgliedskarte fürs Studio (gymCards, store:72).
+  // Unser „/check-in" ist etwas anderes: das Foto nach dem Training. Der Bindestrich hält die
+  // beiden auch hier auseinander, damit diese Prüfung weiter das tut, wofür sie gedacht war.
+  it('kennt weder openGyms Studio-Check-in noch Coach- oder Admin-Screens', () => {
     for (const gone of ['/checkin', '/coach', '/admin', 'MobileOnboarding', 'CoachChat', 'CoachIntake', 'CoachSetup']) {
       expect(source, gone).not.toContain(gone)
     }

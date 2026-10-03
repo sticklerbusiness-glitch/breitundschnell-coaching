@@ -28,6 +28,7 @@ import RoutineEdit from './views/RoutineEdit.jsx'
 import Workout from './views/Workout.jsx'
 import Stats from './views/Stats.jsx'
 import Kalorien from './views/Kalorien.jsx'
+import CheckIn from './views/CheckIn.jsx'
 import History from './views/History.jsx'
 import Library from './views/Library.jsx'
 import Muscles from './views/Muscles.jsx'
@@ -131,6 +132,10 @@ function Shell() {
                   den Stand eines Mitglieds an und darf dort nichts eintragen — wie bei den
                   Einstellungen führt die Route deshalb zurück auf den Plan. */}
               <Route path="/kalorien" element={editor ? <Navigate to="/plan" replace /> : <Kalorien />} />
+              {/* B&S: Der Accountability-Check — ein Foto nach dem Training. Der Bindestrich
+                  im Pfad hält ihn von openGyms Studio-Check-in auseinander (Mitgliedskarte,
+                  abgeschaltet); App.prune.test.js wacht darüber, dass der draußen bleibt. */}
+              <Route path="/check-in" element={editor ? <Navigate to="/plan" replace /> : <CheckIn />} />
               <Route path="/history" element={<History />} />
               <Route path="/library" element={<Library />} />
               <Route path="/muscles" element={<Muscles />} />

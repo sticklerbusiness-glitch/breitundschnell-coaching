@@ -22,9 +22,16 @@ export class WebsiteFehler extends Error {
 
 export async function website(pfad, opts = {}) {
   const url = '/' + String(pfad).replace(/^\/+/, '')
+  // B&S: Bei FormData setzt der Browser den Content-Type SELBST — samt der Grenzmarke, an
+  // der die Teile voneinander getrennt werden. Wer ihn hier überschreibt, schickt ein
+  // Formular ohne diese Marke, und der Server findet darin keine Datei.
+  const istFormular = typeof FormData !== 'undefined' && opts.body instanceof FormData
   const antwort = await fetch(url, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: {
+      ...(istFormular ? {} : { 'Content-Type': 'application/json' }),
+      ...(opts.headers || {})
+    },
     // Gleiche Herkunft, aber ausdrücklich: ohne Cookie ist jede dieser Routen 401.
     credentials: 'same-origin'
   })
@@ -46,3 +53,19 @@ export const kalorienSpeichern = eintrag =>
 
 export const kalorienLoeschen = tag =>
   website(`api/kalorien?datum=${encodeURIComponent(tag)}`, { method: 'DELETE' })
+
+/* ---- Check-in-Fotos ---- */
+
+/** @returns {Promise<{checkins: Array<{id,createdAt,bildPfad,kommentar}>}>} */
+export const checkinsLaden = (limit = 30) => website(`api/checkins?limit=${limit}`)
+
+/** `datei` ist das bereits verkleinerte Bild (siehe views/CheckIn.jsx). */
+export function checkinHochladen(datei, kommentar) {
+  const formular = new FormData()
+  formular.append('bild', datei, datei.name || 'checkin.webp')
+  if (kommentar) formular.append('kommentar', kommentar)
+  return website('api/checkins', { method: 'POST', body: formular })
+}
+
+export const checkinLoeschen = id =>
+  website(`api/checkins?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
