@@ -15,6 +15,7 @@ import { editorMode } from '../lib/editor-mode.js'
 import { confirmSheet, importFromApp, importFromHevy, equipmentProfileSheet, menuSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented } from '../components/ui.jsx'
+import { installationZeigen } from '../components/AppInstallieren.jsx'
 
 // B&S: Die Einstellungen enthalten nur noch, was das Mitglied selbst betrifft — seine
 // Trainings-Vorlieben und seine eigenen Daten. Alles, was zum Betrieb einer eigenen
@@ -251,6 +252,14 @@ export default function Settings() {
     {/* Reset after reading so picking the same file twice still fires onChange. */}
     <input ref={importRef} type="file" accept=".csv,.xml,text/csv,text/xml" style={{ display: 'none' }}
       onChange={ev => { const f = ev.target.files[0]; if (f) importFromApp(f); ev.target.value = '' }} />
+
+    {/* B&S: Wer das Fenster nach dem Anmelden weggetippt hat, findet die Anleitung hier wieder —
+        sonst ist sie genau einmal da und danach für immer weg. */}
+    <Section title="App">
+      <Row icon="addToHome" iconTint="var(--acc)" title="Auf den Home-Bildschirm legen"
+        subtitle="Schritt für Schritt — danach startest du dein Training mit einem Tipp"
+        accessory="chevron" onClick={installationZeigen} />
+    </Section>
 
     {/* ---------- Konto: das liegt auf der Website, nicht in der Trainings-App ---------- */}
     <Section title="Konto">

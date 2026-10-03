@@ -119,6 +119,16 @@ const P = {
   camera: <><path d="M3.6 8.8a2 2 0 0 1 2-2h1.9l1.3-2.1h6.4l1.3 2.1h1.9a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2H5.6a2 2 0 0 1-2-2Z" /><circle cx="12" cy="12.8" r="3.3" /></>,
   image: <><rect x="3.6" y="4.8" width="16.8" height="14.4" rx="2.6" /><circle cx="8.6" cy="9.6" r="1.7" /><path d="m4.4 17.4 4.8-4.6 3.3 3 3-2.6 4.1 4" /></>,
   warning: <><path d="M12 3.4 21.2 19.4H2.8Z" /><path d="M12 9.6v4.4" /><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none" /></>,
+
+  /* ---- B&S: „Zum Home-Bildschirm hinzufügen" ----
+     Die Anleitung zeigt, WONACH man sucht — und zwar nachgezeichnet auf demselben 24er-Raster
+     wie alles andere hier. Die Symbole von Apple und Google selbst mitzuliefern wäre in einem
+     öffentlichen Repository eine Marken- und Lizenzfrage; die Form erkennt man ohnehin, und so
+     sieht sie nicht fremd aus zwischen den übrigen Symbolen. */
+  share: <><path d="M12 3.6v10.8M8.5 7.1 12 3.6l3.5 3.5" /><path d="M7.9 10.2H6.2A2.2 2.2 0 0 0 4 12.4v6.2a2.2 2.2 0 0 0 2.2 2.2h11.6a2.2 2.2 0 0 0 2.2-2.2v-6.2a2.2 2.2 0 0 0-2.2-2.2h-1.7" /></>,
+  addToHome: <><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="4.2" /><path d="M12 8.2v7.6M8.2 12h7.6" /></>,
+  dotsVertical: <><circle cx="12" cy="5.6" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="18.4" r="1.6" fill="currentColor" stroke="none" /></>,
+  compass: <><circle cx="12" cy="12" r="8.2" /><path d="m15.8 8.2-2.1 5.5-5.5 2.1 2.1-5.5Z" /></>,
 }
 
 // A few keys are aliases so call sites can say what they mean.

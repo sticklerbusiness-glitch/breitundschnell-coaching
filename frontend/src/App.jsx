@@ -17,6 +17,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 import Modals from './components/Modals.jsx'
 import Toast from './components/Toast.jsx'
 import SyncBanner from './components/SyncBanner.jsx'
+import AppInstallieren from './components/AppInstallieren.jsx'
 import EditorBanner from './components/EditorBanner.jsx'
 import RestTimer from './components/RestTimer.jsx'
 import TimerFlash from './components/TimerFlash.jsx'
@@ -114,6 +115,8 @@ function Shell() {
       <div id="app" className="vfade" key={loc.pathname}>
         <ErrorBoundary>
           {authed && <SyncBanner />}
+          {/* B&S: zeigt einmalig, wie die App auf den Home-Bildschirm kommt (rendert nichts) */}
+          {authed && <AppInstallieren />}
           {/* B&S: Plan-Editor des Coaches — zeigt sich nur, wenn die App mit ?kunde=… läuft. */}
           <EditorBanner />
           {editorError ? null : !authed ? <Login /> : (

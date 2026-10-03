@@ -10,9 +10,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Breit&Schnell">
-<!-- B&S: the WEBSITE's manifest (absolute path, outside the Vite base). Training is one
-     screen of one installed app that starts at /app — a manifest of its own would make
-     "zum Home-Bildschirm" install a second, competing icon. -->
+<!-- B&S: das Manifest der WEBSITE (absoluter Pfad, außerhalb der Vite-Base). Es gibt genau
+     eine installierte App, und ihr Start ist diese Seite (start_url /training, scope "/").
+     Ein eigenes Manifest hier würde ein zweites, konkurrierendes Symbol installieren —
+     und mit engem Geltungsbereich die Anmeldung aus der App herauswerfen. -->
 <link rel="manifest" href="/manifest.webmanifest">
 <!-- B&S: Icon-Pfade ABSOLUT (Vite ersetzt %BASE_URL% durch die Base /training/). Die Seite
      wird unter /training OHNE Schrägstrich ausgeliefert — Next leitet jeden Pfad mit
