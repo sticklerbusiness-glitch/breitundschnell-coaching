@@ -119,7 +119,7 @@ export default function CheckIn() {
       <button className="iconbtn" onClick={() => nav('/home')} aria-label="Zurück"><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, marginLeft: 12 }}>
         <h1>Check-in</h1>
-        <div className="sub">Ein Foto nach dem Training. Wir sehen, dass du dranbleibst.</div>
+        <div className="sub">Ein Foto nach dem Training.</div>
       </div>
     </div>
 
