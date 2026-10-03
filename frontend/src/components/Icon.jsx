@@ -129,7 +129,6 @@ const P = {
   addToHome: <><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="4.2" /><path d="M12 8.2v7.6M8.2 12h7.6" /></>,
   dotsVertical: <><circle cx="12" cy="5.6" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="18.4" r="1.6" fill="currentColor" stroke="none" /></>,
   compass: <><circle cx="12" cy="12" r="8.2" /><path d="m15.8 8.2-2.1 5.5-5.5 2.1 2.1-5.5Z" /></>,
-  speech: <path d="M20.4 12.4c0 3.9-3.8 7-8.4 7-1 0-2-.15-2.9-.42l-4.5 1.42 1.5-3.6c-1.3-1.2-2.1-2.8-2.1-4.4 0-3.9 3.8-7 8.4-7s8 3.1 8 6.9Z" />,
 }
 
 // A few keys are aliases so call sites can say what they mean.

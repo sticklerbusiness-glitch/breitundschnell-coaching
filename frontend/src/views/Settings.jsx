@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, DEF } from '../store/useStore.js'
 import { workoutControls } from '../lib/workout-controls.js'
@@ -25,14 +25,6 @@ import { installationZeigen } from '../components/AppInstallieren.jsx'
 export default function Settings() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
-  // B&S: Die WhatsApp-Nummer des Coaches kommt mit der öffentlichen Konfiguration vom Server
-  // und steht nirgends im Client-Code. Einmal holen, wenn die Seite aufgeht — loadConfig
-  // merkt sich die Antwort und schluckt jeden Fehler, der Aufruf kostet also nichts.
-  const whatsapp = useStore(s => s.config?.whatsapp)
-  // `?.()` mit Absicht: Mehrere Tests setzen für diese Seite einen schlanken Store zusammen,
-  // der nur das kennt, was die Seite wirklich braucht. Ein fehlendes loadConfig ist dort kein
-  // Fehler, sondern der Punkt — die Zeile darf deswegen nicht den ganzen Baum werfen.
-  useEffect(() => { useStore.getState().loadConfig?.() }, [])
   const { update, replaceState } = useStore()
   const toast = useUI(s => s.toast)
   const fileRef = useRef(null)
@@ -267,15 +259,6 @@ export default function Settings() {
       <Row icon="addToHome" iconTint="var(--acc)" title="Auf den Home-Bildschirm legen"
         subtitle="Schritt für Schritt — danach startest du dein Training mit einem Tipp"
         accessory="chevron" onClick={installationZeigen} />
-      {/* B&S: Der Draht zum Coach. Die Nummer kommt vom Server (/api/config) und steht
-          nirgends im Code — dieses Repository ist öffentlich. Ohne Nummer keine Zeile:
-          ein Knopf auf wa.me ohne Nummer führt auf eine Fehlerseite von WhatsApp. */}
-      {whatsapp && (
-        <Row icon="speech" iconTint="var(--green)" title="Schreib uns"
-          subtitle="Fragen zum Plan, zur Übung, zur Woche — per WhatsApp an Valentin und Ochuko"
-          accessory="chevron"
-          onClick={() => window.open('https://wa.me/' + whatsapp, '_blank', 'noopener')} />
-      )}
     </Section>
 
     {/* ---------- Konto: das liegt auf der Website, nicht in der Trainings-App ---------- */}
