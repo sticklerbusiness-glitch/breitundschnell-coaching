@@ -105,7 +105,18 @@ export default defineConfig({
     // entfallen — die API läuft als Middleware (vite-api-dev.js), die Medien
     // kommen vom CDN.
     port: 5174,
-    strictPort: true
+    strictPort: true,
+    // B&S: In der Produktion liegen App und Website unter DERSELBEN Adresse (die Website
+    // spiegelt /training hinein) — ein Aufruf an /api/kalorien landet dort von selbst bei
+    // der Website. Lokal sind es zwei Server auf zwei Ports, und ohne diese Brücke liefe
+    // jede dieser Anfragen gegen den Vite-Server und käme als 404 zurück. Nur /api/* OHNE
+    // /training davor: die eigenen Funktionen bedient weiterhin vite-api-dev.js.
+    proxy: {
+      '^/api/': {
+        target: process.env.WEBSITE_URL || 'http://localhost:3000',
+        changeOrigin: false   // Herkunft bleibt localhost:5174 — genau das prüft lib/herkunft.ts
+      }
+    }
   },
   build: { outDir: 'dist/training', chunkSizeWarningLimit: 1500 }
 })

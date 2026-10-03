@@ -27,6 +27,7 @@ import Plan from './views/Plan.jsx'
 import RoutineEdit from './views/RoutineEdit.jsx'
 import Workout from './views/Workout.jsx'
 import Stats from './views/Stats.jsx'
+import Kalorien from './views/Kalorien.jsx'
 import History from './views/History.jsx'
 import Library from './views/Library.jsx'
 import Muscles from './views/Muscles.jsx'
@@ -126,6 +127,10 @@ function Shell() {
               <Route path="/plan/r/:id" element={<RoutineEdit />} />
               <Route path="/workout" element={<Workout />} />
               <Route path="/stats" element={<Stats />} />
+              {/* B&S: Kalorien gehören dem Mitglied, nicht dem Plan. Im Editor sieht ein Coach
+                  den Stand eines Mitglieds an und darf dort nichts eintragen — wie bei den
+                  Einstellungen führt die Route deshalb zurück auf den Plan. */}
+              <Route path="/kalorien" element={editor ? <Navigate to="/plan" replace /> : <Kalorien />} />
               <Route path="/history" element={<History />} />
               <Route path="/library" element={<Library />} />
               <Route path="/muscles" element={<Muscles />} />

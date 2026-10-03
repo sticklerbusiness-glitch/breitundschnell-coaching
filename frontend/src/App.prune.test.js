@@ -9,7 +9,7 @@ const source = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8')
 
 describe('App-Shell — Routen', () => {
   it('führt genau die Screens, die Mitglieder und Coaches brauchen', () => {
-    for (const path of ['/home', '/plan', '/plan/r/:id', '/workout', '/stats', '/history', '/library', '/muscles', '/settings']) {
+    for (const path of ['/home', '/plan', '/plan/r/:id', '/workout', '/stats', '/history', '/library', '/muscles', '/kalorien', '/settings']) {
       expect(source, path).toContain(`path="${path}"`)
     }
   })

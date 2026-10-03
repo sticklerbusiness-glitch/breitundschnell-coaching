@@ -12,6 +12,7 @@ import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
 import { useEditorMode, usePlanEditable } from '../lib/editor-mode.js'
 import { APP_NAME } from '../lib/brand.js'
+import KalorienKachel from '../components/KalorienKachel.jsx'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -170,6 +171,10 @@ export default function Home() {
         ? t('No entries yet — log your weight to start the curve.')
         : t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>}
     </div>
+
+    {/* B&S: Kalorien — im Plan-Editor nicht: dort schaut ein Coach auf den Stand eines
+        Mitglieds, und dessen Ernährung trägt er nicht ein. */}
+    {!imEditor && <KalorienKachel />}
 
     <div className={imEditor ? 'card' : 'card tappable'} style={imEditor ? undefined : { cursor: 'pointer' }} {...(imEditor ? {} : tappable(() => calendarSheet()))}>
       <div className="row between">
