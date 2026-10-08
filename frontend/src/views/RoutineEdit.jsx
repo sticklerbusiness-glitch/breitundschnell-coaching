@@ -6,7 +6,7 @@ import { exOr } from '../lib/exercises.js'
 import { activeProfile, exAvailable } from '../lib/equipment.js'
 import { uid } from '../lib/format.js'
 import { t, exerciseNameFor } from '../lib/i18n.js'
-import { supersetUnits, moveSupersetUnit, cleanupSg, exLine, defaultConfig } from '../lib/history.js'
+import { supersetUnits, unitLabels, moveSupersetUnit, cleanupSg, exLine, defaultConfig } from '../lib/history.js'
 import { Thumb } from '../components/Media.jsx'
 import { glyphPicker, exercisePicker, exConfigSheet, confirmSheet, exerciseDetailSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
@@ -309,6 +309,25 @@ function useRoutineReorder(routineIdentity, exercises, onDrop) {
   return { listRef, drag, onClickCapture }
 }
 
+// B&S: Block-Bezeichnung (A, B1, B2 …) vor dem Übungsnamen — siehe unitLabels().
+function BlockTag({ label, superset }) {
+  if (!label) return null
+  return <span className={'blk-tag' + (superset ? ' ss' : '')} aria-hidden="true">{label}</span>
+}
+
+// B&S: Der Supersatz-Schalter sitzt ZWISCHEN zwei Übungen, beschriftet. Vorher war es ein
+// 32 px großes Ketten-Symbol ohne Text rechts an der Übung — wer nicht wusste, dass es Supersätze
+// gibt, hat es nie gefunden. data-nodrag: ein Tipp darauf darf kein Verschieben starten.
+function SupersetLink({ linked, onToggle, above, below }) {
+  return <div className="ss-link" data-nodrag>
+    <button type="button" className={'ss-link-btn' + (linked ? ' on' : '')} aria-pressed={linked}
+      aria-label={linked ? `Supersatz ${above} + ${below} lösen` : `${above} und ${below} zum Supersatz verbinden`}
+      onClick={ev => { ev.stopPropagation(); onToggle() }}>
+      <Icon name="link" />{linked ? 'Supersatz' : '+ Supersatz'}{linked && <Icon name="xmark" className="ss-link-x" />}
+    </button>
+  </div>
+}
+
 export default function RoutineEdit() {
   // B&S: two screens, not one screen with disabled controls — a read-only plan reads better
   // as its own layout (video + tip get the room the edit affordances used to take).
@@ -326,6 +345,7 @@ function RoutineView() {
   const units = supersetUnits(r.ex)
   const unitFirst = new Set(units.filter(u => u.length > 1).map(u => u[0]))
   const inSS = new Set(units.filter(u => u.length > 1).flat())
+  const labels = unitLabels(r.ex)
   const profile = activeProfile(S)
   const missingCount = profile ? r.ex.filter(e => !exAvailable(S, exOr(e.id))).length : 0
 
@@ -355,12 +375,14 @@ function RoutineView() {
         e.warmupSets > 0 ? (e.warmupSets === 1 ? '1 Aufwärmsatz' : e.warmupSets + ' Aufwärmsätze') : null,
       ].filter(Boolean).join(' · ')
       return <div key={i}>
-        {unitFirst.has(i) && <div className="ss-label"><Icon name="link" />{t('Superset')}</div>}
+        {unitFirst.has(i) && <div className="ss-label"><Icon name="link" />
+          <span className="ss-label-t">Supersatz {labels[i].replace(/\d+$/, '')}</span>
+          <span className="ss-label-hint">· direkt nacheinander, Pause erst nach der Runde</span></div>}
         <div className={'item' + (inSS.has(i) ? ' in-ss' : '')} style={{ display: 'block', padding: '12px 14px' }}>
           <div className="row" style={{ gap: 10, alignItems: 'center' }} {...tappable(() => exerciseDetailSheet(ex))}>
             <Thumb ex={ex} />
             <div className="grow" style={{ minWidth: 0 }}>
-              <div className="tt capitalize">{exerciseNameFor(ex)}</div>
+              <div className="tt capitalize"><BlockTag label={labels[i]} superset={inSS.has(i)} />{exerciseNameFor(ex)}</div>
               <div className="ss">{exLine(e, S.unit)}</div>
               {extra && <div className="small dim" style={{ marginTop: 2 }}>{extra}</div>}
             </div>
@@ -427,8 +449,8 @@ function RoutineEditor() {
 
   const units = supersetUnits(r.ex)
   const unitIndex = new Map(units.flatMap((unit, index) => unit.map(i => [i, index])))
-  const unitFirst = new Set(units.filter(u => u.length > 1).map(u => u[0]))
   const inSS = new Set(units.filter(u => u.length > 1).flat())
+  const labels = unitLabels(r.ex)
   const profile = activeProfile(S)
   const missingCount = profile ? r.ex.filter(e => !exAvailable(S, exOr(e.id))).length : 0
 
@@ -483,7 +505,8 @@ function RoutineEditor() {
       return <div key={i} data-routine-row data-ex-index={i}
         className={'routine-drag-row' + (isDragging ? ' is-dragging' : '')}
         style={isDragging ? { transform: `translate3d(0, ${reorder.drag.deltaY}px, 0)` } : undefined}>
-        {unitFirst.has(i) && <div className="ss-label"><Icon name="link" />{t('Superset')}</div>}
+        {i > 0 && <SupersetLink linked={!!linkedPrev} onToggle={() => toggleLink(i)}
+          above={exerciseNameFor(exOr(r.ex[i - 1].id))} below={exerciseNameFor(ex)} />}
         <SwipeToDelete className={'item' + (inSS.has(i) ? ' in-ss' : '')}
           deleteLabel={t('Remove from routine')}
           onDelete={() => edit(x => { x.splice(i, 1); cleanupSg(x) })}
@@ -491,13 +514,12 @@ function RoutineEditor() {
             exConfigSheet(ex, e, cfg => edit(x => { x[i] = { id: x[i].id, sg: x[i].sg, ...cfg } }), () => edit(x => { x.splice(i, 1); cleanupSg(x) }), r)
           }}>
           <Thumb ex={ex} />
-          <div className="grow"><div className="tt capitalize">{exerciseNameFor(ex)}</div><div className="ss">{exLine(e, S.unit)}</div>
+          <div className="grow"><div className="tt capitalize"><BlockTag label={labels[i]} superset={inSS.has(i)} />{exerciseNameFor(ex)}</div><div className="ss">{exLine(e, S.unit)}</div>
             {/* B&S: a coach sees at a glance which exercises already carry a video. */}
             {youtubeId(e.yt) && <div className="small dim row" style={{ marginTop: 2, gap: 4 }}><Icon name="play" style={{ fontSize: 11 }} />Video</div>}
             {e.note && <div className="small dim" style={{ marginTop: 2 }}>{e.note}</div>}</div>
           {noEquip && <span className="tag" style={{ color: 'var(--orange)', borderColor: 'var(--orange)' }} title={t('Needs {0} — not in your active profile', t(ex.eq))}><Icon name="warning" /></span>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none', alignItems: 'center' }}>
-            {i > 0 && <button className={'iconbtn' + (linkedPrev ? ' on-ss' : '')} title={t('Superset with exercise above')} style={{ width: 32, height: 28, borderRadius: 8, fontSize: 15 }} onClick={ev => { ev.stopPropagation(); toggleLink(i) }}><Icon name="link" /></button>}
             <div style={{ display: 'flex', gap: 2 }}>
               <button className="iconbtn" aria-label={t('Move up')} title={t('Move up')} disabled={unitIndex.get(i) === 0} style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, -1) }}><Icon name="chevronUp" /></button>
               <button className="iconbtn" aria-label={t('Move down')} title={t('Move down')} disabled={unitIndex.get(i) === units.length - 1} style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, 1) }}><Icon name="chevronDown" /></button>
@@ -522,7 +544,9 @@ function RoutineEditor() {
       </div>
     })()}
 
-    <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="link" style={{ fontSize: 13 }} />{t('Tap the link button on an exercise to superset it with the one above — you’ll do them back-to-back.')}</div>
+    {/* B&S: Hinweis zeigt auf den beschrifteten Schalter zwischen den Übungen (SupersetLink). */}
+    {r.ex.length > 1 && <div className="small dim row" style={{ margin: '10px 2px', gap: 5, alignItems: 'flex-start' }}><Icon name="link" style={{ fontSize: 13, marginTop: 2 }} />
+      <span>Tippe zwischen zwei Übungen auf „+ Supersatz“: Sie werden direkt nacheinander gemacht, Pause erst nach der Runde (B1 → B2 → Pause). Mehr als zwei Übungen gehen auch.</span></div>}
     <Button variant="primary" onClick={() => exercisePicker((ex, quick) => {
       if (quick) {
         edit(x => x.push({ id: ex.id, ...defaultConfig(ex.id) }))

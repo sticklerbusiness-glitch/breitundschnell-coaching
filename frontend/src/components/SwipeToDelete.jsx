@@ -78,8 +78,10 @@ export default function SwipeToDelete({ children, onDelete, deleteLabel, classNa
       onMouseMove={e => { if (drag.current.startX !== null && e.buttons === 1) move(e.clientX, e.clientY) }}
       onMouseUp={end}
       onMouseLeave={() => { if (drag.current.startX !== null) end() }}>
+      {/* B&S: 1 px nach innen gerückt. Bündig mit der Zeile blitzte das Rot an Ober- und
+          Unterkante durch, sobald die Zeile auf einer halben Pixelposition lag (Kantenglättung). */}
       <button className="swipe-del" aria-label={deleteLabel || t('Delete')}
-        style={{ position: 'absolute', inset: '0 0 0 auto', width: REVEAL, background: 'var(--red)', color: '#fff', fontSize: 12, fontWeight: 600 }}
+        style={{ position: 'absolute', inset: '1px 1px 1px auto', width: REVEAL, background: 'var(--red)', color: '#fff', fontSize: 12, fontWeight: 600 }}
         onClick={() => { setX(0, true); drag.current.open = false; onDelete() }}>{t('Delete')}</button>
       <div ref={rowRef} className={className}
         onClick={e => { if (drag.current.open) { e.stopPropagation(); setX(0, true); drag.current.open = false; return } onClick && onClick(e) }}

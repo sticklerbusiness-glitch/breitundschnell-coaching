@@ -540,6 +540,20 @@ export function supersetUnits(items) {
   return units
 }
 
+// B&S: Block-Bezeichnung wie auf einem Trainingsplan vom Coach: jede Einheit ein Buchstabe,
+// die Übungen eines Supersatzes durchnummeriert — A, B1, B2, C. So steht auf dem Handy des
+// Mitglieds dieselbe Sprache, in der die Coaches ohnehin Pläne schreiben, und „B1/B2" sagt ohne
+// Erklärung: direkt nacheinander. Ein Eintrag pro Übung, gleiche Indizes wie `items`.
+const blockLetter = n => (n < 26 ? '' : blockLetter(Math.floor(n / 26) - 1)) + String.fromCharCode(65 + (n % 26))
+export function unitLabels(items) {
+  const labels = []
+  supersetUnits(Array.isArray(items) ? items : []).forEach((unit, position) => {
+    const letter = blockLetter(position)
+    unit.forEach((index, k) => { labels[index] = unit.length > 1 ? letter + (k + 1) : letter })
+  })
+  return labels
+}
+
 // Move the selected occurrence's complete display unit by one neighbouring unit. Returning a
 // new array keeps this helper pure; the caller decides how to persist it. Index identity matters
 // here because the same exercise id may appear more than once with different setup.
