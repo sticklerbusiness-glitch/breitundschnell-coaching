@@ -91,6 +91,7 @@ describe('exercise picker', () => {
     host = renderTop()
     expect(chip(host).textContent).toBe('Favourites (2)')
     act(() => chip(host).click())
-    expect(names(host)).toEqual([EXDB[5].n, EXDB[9].n])
+    // B&S: die Reihenfolge ist Beliebtheit (lib/popularity.js), nicht mehr die des Datensatzes.
+    expect([...names(host)].sort()).toEqual([EXDB[5].n, EXDB[9].n].sort())
   })
 })

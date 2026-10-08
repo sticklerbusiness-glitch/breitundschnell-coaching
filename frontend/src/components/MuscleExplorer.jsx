@@ -12,6 +12,7 @@ import Icon from './Icon.jsx'
 import { Button } from './ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { isFav, sortFavouritesFirst } from '../lib/favourites.js'
+import { sortByPopularity } from '../lib/popularity.js'
 
 // One explorer for the Library and every catalogue picker. Supplying `onPick` turns
 // a result into a selection; without it the explorer behaves like the normal Library.
@@ -35,7 +36,7 @@ export default function MuscleExplorer({ onPick, onDetail, onPlan }) {
   ])), [catalog])
   const pick = muscle => { setSelected(muscle === selected ? null : muscle); setEq(''); setShown(40) }
   const targeted = selected ? catalog.filter(e => musclesOf(e)[selected]) : []
-  const base = targeted.filter(e => (!bp || e.bp === bp) && matchExercise(e, q))
+  const base = sortByPopularity(targeted.filter(e => (!bp || e.bp === bp) && matchExercise(e, q)), q)
   const eqOpts = equipmentOf(base)
   const eqOn = eqOpts.includes(eq) ? eq : ''
   // Favourites float to the top of whatever the filters left (issue #6), the rest keeps its order.

@@ -13,6 +13,8 @@ import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { tappable, useRevealActiveChip } from '../lib/use-sheet-keyboard.js'
 import { isFav, sortFavouritesFirst } from '../lib/favourites.js'
+// B&S: beliebteste Übungen zuerst statt Alphabet des englischen Datensatzes.
+import { sortByPopularity } from '../lib/popularity.js'
 // B&S: "+ Plan" writes into a routine — coaches only.
 import { usePlanEditable } from '../lib/editor-mode.js'
 
@@ -27,7 +29,7 @@ export default function Library() {
   const [shown, setShown] = useState(40)
   const bpStrip = useRef(null), eqStrip = useRef(null)
   const profile = activeProfile(S)
-  const base = allExercises(S).filter(e => (!bp || e.bp === bp) && matchExercise(e, q))
+  const base = sortByPopularity(allExercises(S).filter(e => (!bp || e.bp === bp) && matchExercise(e, q)), q)
   const eqFiltered = (profile && !showAll) ? base.filter(e => exAvailable(S, e)) : base
   const eqOpts = equipmentOf(eqFiltered)
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
