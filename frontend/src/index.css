@@ -757,6 +757,16 @@ body.chips-dragging *{cursor:inherit}
 .effpick .effpick-free .stp{flex:none;width:148px}
 .effpick .effpick-free .stp .num{font-size:17px;font-weight:600}
 .effpick .effpick-free .stp .num::placeholder{color:var(--label-3);font-weight:500}
+/* B&S: Strecken-Zeilen — die Zeit („1:02:30") braucht mehr Platz als die Strecke („800"). */
+.setrow.dist .stp.w,.sethead.dist .w-sp{flex:1}
+.setrow.dist .stp.r,.sethead.dist .r-sp{flex:1.3}
+.setrow.dist .stp button{width:28px}
+.setrow.dist.eff3 .stp button{width:22px}
+.setrow.dist .stp .num{font-size:15px}
+/* B&S: Last-Spalte der Strecken-Erfassung (Sled, Farmer's Carry) und die Pace unter der Zeile. */
+.setrow .stp.l3{flex:.9 1 0;min-width:0}
+.setrow.eff3 .stp.l3 button{width:22px}
+.pace-row{margin:-4px 0 4px 32px;font-size:12px;color:var(--label-3);font-variant-numeric:tabular-nums}
 .setrow.done .n{background:var(--acc);color:var(--on-acc)}
 .setrow.done{opacity:.45}
 

@@ -1,6 +1,7 @@
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { todayISO, isoOf, weekKey, weekStartOf, fmtNum } from './format.js'
-import { isCardio, isBodyweightEq } from './exercises.js'
+import { isCardio, isBodyweightEq, EXIDX } from './exercises.js'
+import { sportOf, distDefaults, distLine } from './endurance.js'
 import { phaseForSet, modeForSet, modeForEntry, isWarmupRow, normalizeMode, completedVolumeOf, nextDropWeight, splitBurstReps, makeSideSet, isSideSet, syncSideAggregate } from './workout-model.js'
 const objectOf = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 // Completed-state-independent work rows whose authoritative mode matches the requested mode.
@@ -23,12 +24,24 @@ import { t } from './i18n-core.js'
 //   reps   — weight × reps      sets look like { w, r }
 //   time   — a work duration    sets look like { sec, w }   (w = 0 for bodyweight)
 //   cardio — duration + speed   sets look like { min, speed }
+//   dist   — B&S: distance + time (+ load)   sets look like { m, sec, w }  (lib/endurance.js)
 // An entry without `mode` behaves exactly as before, so every existing plan, workout and
 // plan file is read unchanged and nothing needs migrating.
 export function modeOf(cfg) {
   const m = cfg && cfg.mode
-  if (m === 'reps' || m === 'time' || m === 'cardio') return m
+  if (m === 'reps' || m === 'time' || m === 'cardio' || m === 'dist') return m
   return isCardio(cfg && cfg.id) ? 'cardio' : 'reps'
+}
+
+// B&S: Wie eine Übung erfasst wird, wenn sie NEU in einen Plan oder ein Training kommt. Eine
+// Strecken-Übung (Laufen, Schwimmen, Sled Push …) startet als Distanz, eine Halteübung ohne
+// Strecke (Plank) als Zeit. Bewusst nur für neue Einträge: ein gespeicherter Eintrag ohne
+// `mode` liest modeOf() weiter wie bisher — ein alter „Laufen"-Eintrag mit Minuten und km/h
+// darf nicht plötzlich als Strecke gelesen werden.
+export function defaultModeOf(id) {
+  if (sportOf(id)) return 'dist'
+  if (EXIDX[id]?.dm === 'time') return 'time'
+  return modeOf({ id })
 }
 export const isTimed = cfg => modeOf(cfg) === 'time'
 
@@ -110,7 +123,8 @@ export function setLabel(id, s, cfg) {
   let mode = modeOf(c)
   // A set saved by an older build carries no target with it; the set's own fields still say what
   // it was — seconds for a timed set, minutes for cardio — so those are not read back as "0 reps".
-  if (!cfg && !(s.r > 0)) { if (s.min > 0 || s.speed > 0) mode = 'cardio'; else if (s.sec > 0) mode = 'time' }
+  if (!cfg && !(s.r > 0)) { if (s.m > 0) mode = 'dist'; else if (s.min > 0 || s.speed > 0) mode = 'cardio'; else if (s.sec > 0) mode = 'time' }
+  if (mode === 'dist') return distLine(s, sportOf(c.id ?? id))
   if (mode === 'cardio') return `${s.min || 0} min @ ${fmtNum(s.speed || 0)} km/h`
   if (mode === 'time') return fmtSec(s.sec) + (s.w > 0 ? ` · ${fmtNum(s.w)}` : '')
   const bw = isBw({ ...c, id: c.id ?? id })
@@ -135,7 +149,8 @@ export function setLabel(id, s, cfg) {
 }
 // Default config for a freshly added exercise.
 export function defaultConfig(id, mode) {
-  const m = mode || modeOf({ id })
+  const m = mode || defaultModeOf(id)
+  if (m === 'dist') return { mode: 'dist', ...distDefaults(sportOf(id)) }
   if (m === 'cardio') return { sets: 1, min: 20, speed: 8 }
   // Written only when it is true, so a barbell config is byte-for-byte what it was before
   // the flag existed and a plan file gains nothing it does not need.
@@ -151,6 +166,11 @@ export function exLine(cfg, unit) {
   // Added weight reads as added: "+10 kg" on a dip belt, "60 kg" on a barbell.
   const load = cfg.weight ? ' · ' + (isBw(cfg) ? '+' : '') + fmtNum(cfg.weight) + ' ' + unit : ''
   if (mode === 'cardio') return `${n} × ${cfg.min || 20} min @ ${fmtNum(cfg.speed || 8)} km/h`
+  // B&S: „6 × 800 m · 3:10 · 3:58 /km", ein einzelner Lauf ohne „1 ×": „10 km · 55:00 · 5:30 /km".
+  if (mode === 'dist') {
+    const line = distLine({ m: cfg.m, sec: cfg.sec, w: cfg.weight }, sportOf(cfg.id), unit)
+    return n > 1 ? `${n} × ${line}` : line
+  }
   if (mode === 'time') return `${n} × ${fmtSec(cfg.sec || 45)}${load}`
   // This is the line with room for it, so the split is spelled out: "3 × 16 · 8/side".
   const split = isPerSide(cfg) ? ' · ' + t('{0}/side', fmtNum(sideReps(cfg.reps))) : ''
@@ -390,6 +410,19 @@ function buildWorkSets(S, cfg, options = {}) {
     for (let i = 0; i < n; i++) {
       const prev = prevAt(i)
       sets.push({ min: prev ? prev.min : (cfg.min || 20), speed: prev ? prev.speed : (cfg.speed || 8), done: false })
+    }
+    return sets
+  }
+  // B&S: Bei der Strecke gilt der PLAN, nicht das letzte Mal — „6 × 800 m in 3:10" ist die
+  // Vorgabe des Coaches, und die Zeit von letzter Woche wäre eine andere Einheit. Das letzte Mal
+  // springt nur ein, wenn der Plan keine Strecke nennt (freies Training).
+  if (mode === 'dist') {
+    for (let i = 0; i < n; i++) {
+      const prev = prevAt(i)
+      const carried = prev && prev.m > 0 ? prev : null
+      const m = cfg.m > 0 ? cfg.m : (carried ? carried.m : distDefaults(sportOf(cfg.id)).m)
+      const w = cfg.weight > 0 ? cfg.weight : (carried && carried.w > 0 ? carried.w : 0)
+      sets.push({ m, sec: cfg.sec > 0 ? cfg.sec : 0, ...(w > 0 ? { w } : {}), done: false })
     }
     return sets
   }
@@ -663,6 +696,15 @@ export function insertWarmupRow(rows, mode, target, step = 2.5) {
     // lands a notch heavy is a set you have to strip plates off before you can use it.
     return Math.max(0, Math.min(to, Math.floor((from + (to - from) / 2) / step) * step))
   }
+  // B&S: Einlaufen/Einschwimmen — dieselbe Strecke als Vorgabe, die Zeit trägt man selbst ein.
+  if (mode === 'dist') {
+    const next = rows.slice()
+    next.splice(at, 0, {
+      m: prev ? prev.m : (work ? work.m : (target.m || 0)), sec: 0,
+      done: false, phase: 'warmup', warmup: true,
+    })
+    return next
+  }
   const warm = mode === 'cardio'
     ? {
       min: prev ? prev.min : (work ? work.min : (target.min || 20)),
@@ -700,7 +742,7 @@ export function workSetsDone(w) {
   )
 }
 
-const METRIC_MODES = ['reps', 'time', 'cardio']
+const METRIC_MODES = ['reps', 'time', 'cardio', 'dist']
 const completedRowsForMode = (entry, mode) => workRowsForMode(entry, mode).filter(s => s.done === true && !isWarmupRow(s))
 
 export function metricRowsForEntry(entry, mode) {

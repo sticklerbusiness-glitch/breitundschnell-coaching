@@ -42,6 +42,27 @@ export const POPULAR = [
   '1460', // Ausfallschritt im Gehen
   '1409', // Glute Bridge (Langhantel)
   '0861', // Rudern sitzend (Kabelzug)
+  // Ausdauer und Hyrox (Strecke + Zeit, lib/endurance.js) — Hybrid-Coaching, also weit oben
+  '0685', // Laufen
+  'bs-schwimmen-kraul',
+  'bs-rad-strasse',
+  'bs-rudern-ergo',
+  '2142', // SkiErg
+  'bs-sled-push',
+  'bs-sled-pull',
+  'bs-burpee-broad-jump',
+  'bs-sandbag-lunges',
+  'bs-wall-balls',
+  '2133', // Farmer's Walk (Kurzhantel)
+  'bs-hip-thrust',
+  'bs-plank',
+  'bs-face-pull',
+  'bs-laufband',
+  'bs-rad-indoor',
+  'bs-koppellauf',
+  'bs-schwimmen-brust',
+  'bs-schwimmen-ruecken',
+  'bs-schwimmen-freiwasser',
   // Kurzhantel- und Maschinen-Klassiker
   '0289', // Bankdrücken (Kurzhantel)
   '0314', // Schrägbankdrücken (Kurzhantel)
@@ -85,14 +106,11 @@ export const POPULAR = [
   '0175', // Crunch kniend (Kabelzug)
   '0489', // Rückenstrecken
   // Athletik und Hyrox-nahe Übungen aus dem Katalog
-  '2133', // Farmer's Walk (Kurzhantel)
   '1160', // Burpee
   '0630', // Mountain Climber
   '0514', // Sprungkniebeuge
   '3305', // Thruster (Langhantel)
   '0648', // Power Clean
-  '2142', // SkiErg
-  '0685', // Laufen
   '2612', // Seilspringen
   '0798', // Radfahren locker (Ergometer)
   '3666', // Gehen am Laufband mit Steigung

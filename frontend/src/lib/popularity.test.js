@@ -1,7 +1,6 @@
 // B&S: Beliebtheit statt Alphabet — vor allem der Fall, der aufgefallen ist: Bei „Klimmzug"
 // stand der normale Klimmzug unten und der einarmige mit Zusatzgewicht weit oben.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { EXDB } from './exercises-data.js'
 import { CATALOGUE, matchExercise } from './exercises.js'
 import de from '../exercise-names/de.js'
 import { _setLangState } from './i18n-core.js'
@@ -16,7 +15,7 @@ afterAll(() => { _setLangState('en', {}, null, null) })
 
 describe('POPULAR', () => {
   it('names only catalogue exercises, each once', () => {
-    const known = new Set(EXDB.map(e => e.id))
+    const known = new Set(CATALOGUE.map(e => e.id))
     expect(POPULAR.filter(id => !known.has(id))).toEqual([])
     expect(new Set(POPULAR).size).toBe(POPULAR.length)
   })

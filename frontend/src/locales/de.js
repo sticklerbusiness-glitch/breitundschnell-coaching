@@ -405,6 +405,10 @@ export default {
   'smith machine': 'Multipresse', 'stability ball': 'Gymnastikball', 'stationary bike': 'Ergometer',
   'stepmill machine': 'Stepper', 'tire': 'Reifen', 'trap bar': 'Trap-Bar',
   'upper body ergometer': 'Oberkörper-Ergometer', 'weighted': 'Mit Zusatzgewicht', 'wheel roller': 'Bauchroller',
+  // B&S: Geräte der neuen Ausdauer- und Hyrox-Übungen (lib/bs-exercises.js) und der
+  // Körperteil-Filter „full body", der bisher englisch im Filter stand.
+  'bike': 'Fahrrad', 'treadmill': 'Laufband', 'rowing machine': 'Rudergerät', 'sled': 'Schlitten (Sled)',
+  'sandbag': 'Sandsack', 'full body': 'Ganzkörper',
   // --- data terms: targets & muscles ---
   'abductors': 'Abduktoren', 'abs': 'Bauch', 'adductors': 'Adduktoren', 'biceps': 'Bizeps',
   'calves': 'Waden', 'cardiovascular system': 'Herz-Kreislauf', 'delts': 'Schultern',

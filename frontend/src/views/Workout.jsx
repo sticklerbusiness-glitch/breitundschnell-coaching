@@ -20,6 +20,9 @@ import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWo
 import { effortColor } from '../lib/effort.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
+// B&S: Strecken-Erfassung (Laufen, Schwimmen, Rad, Hyrox) — siehe lib/endurance.js.
+import { DurationField } from '../components/DurationField.jsx'
+import { sportOf, distStep, paceLabel, SPORTS } from '../lib/endurance.js'
 import { nextPrescription, applyPrescription, defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
 import { progressionGuidance } from '../lib/progression-copy.js'
 import { glyphOf } from '../lib/glyphs.js'
@@ -82,7 +85,7 @@ function Elapsed({ start }) {
   return <span>{t}</span>
 }
 
-/* ---------- one exercise block (reps: weight×reps · time: a held duration · cardio: duration+speed) ---------- */
+/* ---------- one exercise block (reps: weight×reps · time: a held duration · cardio: duration+speed · dist: distance+time) ---------- */
 // `compact` shrinks the block for a superset member; `dense` (compact view) goes further and
 // drops everything that is not a set you are logging — media, tag chips, the note lines, the
 // "last time" recap and the progression line — leaving the name, the ⋯ menu and the sets.
@@ -142,13 +145,16 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
   const mode = modeOf({ ...(entry.target || {}), id: entry.id })
   const cardio = mode === 'cardio'
   const timed = mode === 'time'
+  // B&S: Strecke + Zeit, die Pace rechnet die App (lib/endurance.js).
+  const dist = mode === 'dist'
+  const sport = dist ? sportOf(entry.id) : null
   const last = lastEntryFor(S, entry.id)
   const standingNote = exNoteFor(S, entry.id)
   // Only worth surfacing while there is still work left: once the exercise is finished, a note
   // telling you what to do in it is behind you, and the block is already long.
   const pinnedNote = entry.sets.some(s => !s.done) ? pinnedNoteFor(S, entry.id) : null
   // The number is the heaviest logged set, or the working weight you kept.
-  const best = cardio ? 0 : Math.max(bestWeightFor(S, entry.id), (S.exWeights[entry.id] || {}).w || 0)
+  const best = (cardio || dist) ? 0 : Math.max(bestWeightFor(S, entry.id), (S.exWeights[entry.id] || {}).w || 0)
   // What the progression policy decided for this session, and why (issue #17). Computed when
   // the session was built so the reason matches the numbers already in the rows.
   const plan = entry.plan
@@ -158,7 +164,7 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
   // config brings it back, now labelled as the addition it is.
   const cfg = { ...(entry.target || {}), id: entry.id }
   const ytId = youtubeId(cfg.yt)   // B&S
-  const bw = !cardio && isBw(cfg)
+  const bw = !cardio && !dist && isBw(cfg)
   // A unilateral exercise logs each side on its own (issue #60): work rows render as an L and an
   // R sub-row, each with its own weight/reps/effort and done tick. Warm-ups stay single.
   const perSide = mode === 'reps' && isPerSide(cfg)
@@ -168,12 +174,17 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
   // The reps column is the total in every mode, unilateral included — the stepper walks in
   // twos there so the number you land on is one you can actually split evenly.
   const repCol = { f: 'r', step: repStep(cfg), dec: false, hd: t('Reps') }
-  const col1 = cardio ? { f: 'min', step: 1, dec: false, hd: t('Duration (min)') }
-    : timed ? { f: 'sec', step: 5, dec: false, hd: t('Seconds') }
-      : (bw && !added) ? repCol : loadCol
-  const col2 = cardio ? { f: 'speed', step: 0.5, dec: true, hd: t('Speed (km/h)') }
-    : timed ? ((bw && !added) ? null : loadCol)
-      : (bw && !added) ? null : repCol
+  // B&S: Eine Last-Spalte bekommt die Strecke nur, wenn es eine Last gibt (Sled, Farmer's Carry,
+  // Sandsack) — beim Laufen wäre sie eine leere dritte Spalte auf jedem Satz.
+  const distLoad = dist && ((cfg.weight || 0) > 0 || entry.sets.some(s => (s.w || 0) > 0))
+  const col1 = dist ? { f: 'm', step: distStep(sport), dec: sport === 'carry', hd: 'Strecke (m)' }
+    : cardio ? { f: 'min', step: 1, dec: false, hd: t('Duration (min)') }
+      : timed ? { f: 'sec', step: 5, dec: false, hd: t('Seconds') }
+        : (bw && !added) ? repCol : loadCol
+  const col2 = dist ? { f: 'sec', step: 5, dur: true, hd: 'Zeit' }
+    : cardio ? { f: 'speed', step: 0.5, dec: true, hd: t('Speed (km/h)') }
+      : timed ? ((bw && !added) ? null : loadCol)
+        : (bw && !added) ? null : repCol
   // Effort (RIR or RPE, whichever the profile logs) only makes sense for weighted rep sets,
   // not cardio/timed holds, and is opt-in since it adds a third stepper to every row. `opt`
   // because an unlogged effort is not the same as 0 — RIR 0 says the set went to failure.
@@ -181,7 +192,8 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
   const eff = EFFORT[kind]
   // The effort column carries the scale key (`eff`) and its field name; unlike weight/reps it
   // is not a stepper — it opens a colour-coded picker (see effortCell). `f` is s.rir or s.rpe.
-  const col3 = mode === 'reps' && eff ? { f: eff.f, eff: kind, hd: t(eff.hd) } : null
+  const col3 = mode === 'reps' && eff ? { f: eff.f, eff: kind, hd: t(eff.hd) }
+    : distLoad ? { f: 'w', step: 2.5, dec: true, hd: S.unit } : null
   // The effort column walks its own scale — see stepEffort. Weight and reps step up from 0
   // with no ceiling, as they always did.
   const bump = (s, i, col, dir) => {
@@ -204,15 +216,17 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
   const cell = (s, i, col, cls) => (
     <div className={'stp ' + cls + (wc.steppers ? '' : ' plain')}>
       {wc.steppers && <button aria-label="Decrease" onClick={() => bump(s, i, col, -1)}><Icon name="minus" /></button>}
-      <span className="val"><NumberField decimal={col.dec} nullable={col.opt} value={s[col.f] ?? ''}
-        onChange={v => onField(i, col.f, v)} /></span>
+      <span className="val">{col.dur
+        ? <DurationField value={s[col.f] || 0} onChange={v => onField(i, col.f, v)} placeholder="m:ss" aria-label={col.hd} />
+        : <NumberField decimal={col.dec} nullable={col.opt} value={s[col.f] ?? ''}
+          onChange={v => onField(i, col.f, v)} />}</span>
       {wc.steppers && <button aria-label="Increase" onClick={() => bump(s, i, col, 1)}><Icon name="plus" /></button>}
     </div>
   )
   // Everything about this exercise that is not a set you are logging right now lives behind one
   // button. What used to be a row of buttons in the header, a chip under the bar, a strip of
   // three under the sets and four more below the card is a single list you open once a session.
-  const barInfo = (!cardio && !(bw && !added) && usesBar(ex)) ? (() => {
+  const barInfo = (!cardio && !dist && !(bw && !added) && usesBar(ex)) ? (() => {
     const bar = barWeightFor(S, entry.id)
     if (!(bar > 0)) return null
     const nextW = entry.sets.find(s => !s.done)?.w
@@ -393,10 +407,11 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
     {!dense && <>
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
       {cardio && <span className="tag acc"><Icon name="figureRun" />{t('Cardio')}</span>}
+      {dist && <span className="tag acc nocap"><Icon name={sport === 'swim' ? 'swim' : sport === 'bike' ? 'bike' : 'figureRun'} />{(SPORTS[sport] || SPORTS.carry).label}</span>}
       {/* A unilateral exercise is logged per side directly (the L/R rows below), so the old
           "{n} per side" chip — which halved the combined total for display — is gone: the split
           is no longer derived, it is what you enter. The tag only flags that this is per-side. */}
-      {!cardio && !timed && isPerSide(cfg) && <span className="tag acc nocap"><Icon name="shuffle" />{t('Per side')}</span>}
+      {!cardio && !timed && !dist && isPerSide(cfg) && <span className="tag acc nocap"><Icon name="shuffle" />{t('Per side')}</span>}
       {(ex.tg || ex.bp) && <span className="tag">{t(ex.tg || ex.bp)}</span>}
       {ex.eq && <span className="tag">{t(ex.eq)}</span>}
       {best > 0 && <span className="tag nocap">{t('Best:')} {fmtNum(best)} {S.unit}</span>}
@@ -429,7 +444,7 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
     </>}
     <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>
       {/* the header carries the same eff3 sizing as the rows, or the labels drift off their columns */}
-      <div className={'sethead' + (col3 ? ' eff3' : '')}><span className="n-sp" /><span className="w-sp">{col1.hd}</span>{col2 && <span className="r-sp">{col2.hd}</span>}{col3 && <span className="eff-sp">{col3.hd}</span>}{timed && <span className="ck-sp" />}<span className="ck-sp" /></div>
+      <div className={'sethead' + (col3 ? ' eff3' : '') + (dist ? ' dist' : '')}><span className="n-sp" /><span className="w-sp">{col1.hd}</span>{col2 && <span className="r-sp">{col2.hd}</span>}{col3 && <span className="eff-sp">{col3.hd}</span>}{timed && <span className="ck-sp" />}<span className="ck-sp" /></div>
       {entry.sets.map((s, i) => {
         const warm = isWarmupRow(s)
         const warmBefore = i > 0 && isWarmupRow(entry.sets[i - 1])
@@ -452,11 +467,11 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
               </div>
             </div>
           ) : (
-          <div ref={el => onSetRowRef?.(i, el)} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}>
+          <div ref={el => onSetRowRef?.(i, el)} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '') + (dist ? ' dist' : '')}>
             <button type="button" className="n" aria-label={t('Set {0}', phaseNum)} title={t('More')} onClick={() => openSetMenu(s, i)}>{phaseNum}</button>
             {cell(s, i, col1, 'w')}
             {col2 && cell(s, i, col2, 'r')}
-            {col3 && effortCell(s, i, col3)}
+            {col3 && (col3.eff ? effortCell(s, i, col3) : cell(s, i, col3, 'l3'))}
             {/* A timed set is started, not typed: the timer counts the hold down and checks the
                 set off itself. The checkbox stays for anyone who timed it on their own watch. */}
             {timed && <button className="setgo" aria-label={t('Start set')} disabled={s.done || !!working}
@@ -464,6 +479,8 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
             <Check checked={s.done} onChange={() => onToggle(i)} />
           </div>
           )}
+          {/* B&S: die Pace zur Zeile, sobald Strecke und Zeit stehen — gerechnet, nie getippt. */}
+          {dist && paceLabel(sport, s.m, s.sec) && <div className="pace-row">Pace {paceLabel(sport, s.m, s.sec)}</div>}
           {/* Drop-sets and rest-pause bursts extend this same row — no long rest, no new set.
               A planned exercise arrives with these already filled in (applyIntensifierPlan);
               every value here is just as editable as the main row's own weight/reps. */}
@@ -620,6 +637,11 @@ function ActiveWorkout() {
     const l = e.sets[e.sets.length - 1]
     const m = modeOf({ ...(e.target || {}), id: e.id })
     if (m === 'cardio') e.sets.push({ min: l ? l.min : (e.target.min || 20), speed: l ? l.speed : (e.target.speed || 8), done: false })
+    // B&S: noch ein Intervall — dieselbe Strecke und Last wie das letzte, die Zeit kommt neu.
+    else if (m === 'dist') {
+      const w = l && l.w > 0 ? l.w : (e.target.weight || 0)
+      e.sets.push({ m: l ? l.m : (e.target.m || 0), sec: e.target.sec > 0 ? e.target.sec : 0, ...(w > 0 ? { w } : {}), done: false })
+    }
     else if (m === 'time') e.sets.push({ sec: l ? l.sec : (e.target.sec || 45), w: l ? (l.w || 0) : (e.target.weight || 0), done: false })
     else {
       const row = { w: l ? l.w : 0, r: l ? l.r : e.target.reps, done: false }

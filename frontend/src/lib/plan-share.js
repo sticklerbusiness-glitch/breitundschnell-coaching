@@ -9,7 +9,7 @@
 //     a page break — each exercise, and each routine that fits, stays in one place.
 
 import { EXIDX, isBodyweightEq } from './exercises.js'
-import { modeOf, fmtSec, isBw, isPerSide, sideReps, MAX_PLANNED_WARMUPS } from './history.js'
+import { modeOf, fmtSec, isBw, isPerSide, sideReps, exLine, MAX_PLANNED_WARMUPS } from './history.js'
 import { deriveSessionName } from './session-merge.js'
 import { uid, todayISO, DAYN, weekOrder, weekStartOf, fmtNum, exCount } from './format.js'
 import { youtubeId } from './youtube.js'
@@ -26,6 +26,12 @@ function cleanEx(e) {
   if (mode === 'cardio') {
     if (e.min != null) o.min = e.min
     if (e.speed != null) o.speed = e.speed
+  } else if (mode === 'dist') {
+    // B&S: Strecke — ohne `mode` käme am anderen Ende ein 800-Wiederholungen-Satz an.
+    o.mode = 'dist'
+    if (e.m != null) o.m = e.m
+    if (e.sec > 0) o.sec = e.sec
+    if (e.weight) o.weight = e.weight
   } else if (mode === 'time') {
     // Written out even though 'reps' is the fallback for a non-cardio id: a plan file that
     // dropped the mode would turn a 45-second plank into a 45-rep one at the other end.
@@ -40,7 +46,7 @@ function cleanEx(e) {
   // it disagrees with the catalogue, since agreeing is what the other end already assumes.
   if (e.bodyweight != null && e.bodyweight !== isBodyweightEq(e.id)) o.bodyweight = e.bodyweight
   // Only on reps work — `side` counts reps, and a timed hold has none to split.
-  if (e.side && mode !== 'time' && mode !== 'cardio') o.side = true
+  if (e.side && mode === 'reps') o.side = true
   // Progression settings travel with the plan — a shared Greyskull routine that arrives
   // without its rule is just a list of weights.
   if (e.prog) o.prog = e.prog
@@ -223,6 +229,8 @@ function scheme(e, unit) {
     const body = `${e.min || 20} min @ ${fmtNum(e.speed || 8)} km/h`
     return sets > 1 ? `${sets} × ${body}` : body
   }
+  // B&S: dieselbe Zeile wie im Plan-Editor (exLine), auch auf Papier.
+  if (mode === 'dist') return exLine(e, unit)
   let s = mode === 'time' ? `${sets} × ${fmtSec(e.sec || 45)}` : `${sets} × ${e.reps ?? 10}`
   if (e.weight) s += ` · ${isBw(e) ? '+' : ''}${fmtNum(e.weight)} ${unit}`
   // A printed plan is read at the rack, so the split earns its four characters.

@@ -1,6 +1,7 @@
 import { metricModeForEntry, metricRowsForEntry, bestWeightForEntry, modeOf } from './history.js'
 import { completedVolumeOf } from './workout-model.js'
 import { bestSetOf } from './onerm.js'
+import { totalMeters } from './endurance.js'
 
 // One exercise's past, read back for the history sheet (issue #43): a chart series and the
 // last few sessions, derived in a single pass over the log so the sheet can memoise the
@@ -12,6 +13,7 @@ import { bestSetOf } from './onerm.js'
 //            that is the thing improving
 //   time   — the longest completed hold, in seconds (metric 'sec')
 //   cardio — the minutes logged that session (metric 'min')
+//   dist   — B&S: the distance covered that session, in km (metric 'km')
 // The mode is the one the exercise was logged in most recently; a session logged in another
 // mode still appears in the list (its sets are labelled by their own target) but gets no point
 // and no value, so the curve never mixes seconds with kilos.
@@ -46,8 +48,9 @@ export function exerciseHistory(S, exId, { limit = HISTORY_SESSIONS } = {}) {
 
   const mode = logged[logged.length - 1].mode
   const repsOnly = mode === 'reps' && !logged.some(l => l.mode === 'reps' && bestWeightForEntry(l.en) > 0)
-  const metric = mode === 'cardio' ? 'min' : mode === 'time' ? 'sec' : repsOnly ? 'reps' : 'weight'
+  const metric = mode === 'dist' ? 'km' : mode === 'cardio' ? 'min' : mode === 'time' ? 'sec' : repsOnly ? 'reps' : 'weight'
   const valueOf = ({ en, rows }) => {
+    if (metric === 'km') return totalMeters(rows) / 1000
     if (metric === 'min') return rows.reduce((a, s) => a + (Number(s.min) || 0), 0)
     if (metric === 'sec') return Math.max(0, ...rows.map(s => Number(s.sec) || 0))
     if (metric === 'reps') return Math.max(0, ...rows.map(s => Number(s.r) || 0))

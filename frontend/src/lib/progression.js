@@ -27,7 +27,9 @@ export const POLICIES = ['off', 'linear', 'greyskull', 'double', 'time']
 export const POLICIES_FOR = {
   reps: ['off', 'linear', 'greyskull', 'double'],
   time: ['off', 'time'],
-  cardio: ['off']
+  cardio: ['off'],
+  // B&S: Strecke — die Steigerung schreibt der Coach in den Plan, keine Automatik.
+  dist: ['off']
 }
 
 export const POLICY_NAME = {

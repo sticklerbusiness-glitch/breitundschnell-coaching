@@ -14,6 +14,9 @@ import { buildStarterPlan, starterPlanDays, starterPlanOptions } from './lib/sta
 import Media, { Thumb } from './components/Media.jsx'
 import LineChart from './components/LineChart.jsx'
 import Stepper from './components/Stepper.jsx'
+// B&S: Strecken-Erfassung (Laufen, Schwimmen, Rad, Hyrox).
+import { DurationStepper } from './components/DurationField.jsx'
+import { sportOf, distStep, distDefaults, paceLabel, paceSecOf, paceUnit, timeForPace, totalMeters, fmtDist } from './lib/endurance.js'
 import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row, TextField, NumberField, MultiSelectRow } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
@@ -696,7 +699,7 @@ function ExerciseDetail({ ex, close }) {
       <h4 className="sec">{t('Bar weight')}</h4>
       <BarWeightEditor ex={ex} extra={t('You still log the total weight — the bar only feeds the per-side plate math.')} />
     </>}
-    {!isCardio(ex) && <OneRM ex={ex} />}
+    {!isCardio(ex) && !sportOf(ex) && <OneRM ex={ex} />}
     {instrFor(ex).length > 0 &&<><h4 className="sec">{t('How to')}{!INSTR_LANGS.includes(getLang()) && <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}> · {t('instructions in English')}</span>}</h4><ol className="steps-list">{instrFor(ex).map((s, i) => <li key={i}>{s}</li>)}</ol></>}
   </>
 }
@@ -714,7 +717,7 @@ function ExerciseHistory({ exId }) {
   const h = useMemo(() => exerciseHistory(st, exId), [st.workouts, exId])
   const [curve, setCurve] = useState('top')
   const onE1 = curve === 'e1rm' && h.e1rmPoints.length > 0
-  const unit = h.metric === 'weight' ? st.unit : h.metric === 'reps' ? t('reps') : h.metric === 'sec' ? 's' : t('min')
+  const unit = h.metric === 'weight' ? st.unit : h.metric === 'reps' ? t('reps') : h.metric === 'sec' ? 's' : h.metric === 'km' ? 'km' : t('min')
   const e1Best = useMemo(() => Math.max(0, ...h.e1rmPoints.map(p => p.y)), [h])
   if (!h.total) return <>
     <h3 className="capitalize">{exerciseNameFor(ex)}</h3>
@@ -1224,9 +1227,13 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
   })
   // Cardio keeps its own duration+speed form; the reps/time choice (issue #16) is offered for
   // everything else, which is where the gap was — planks, hangs, wall sits, loaded carries.
-  const mode = cardio ? 'cardio' : modeOf({ ...c, id: ex.id })
+  // B&S: dazu „Strecke" (mode 'dist') für jede Übung — bei Cardio-Übungen neben Dauer & Tempo,
+  // bei allen anderen neben Wdh und Zeit (Sled Push, Farmer's Carry, Ausfallschritte im Gehen).
+  const mode = modeOf({ ...c, id: ex.id })
+  const dist = mode === 'dist'
+  const sport = sportOf(ex) || (cardio ? 'run' : 'carry')
   // Both default from the dataset and are then whatever the config says — see isBw.
-  const bw = !cardio && isBw({ ...c, id: ex.id })
+  const bw = mode !== 'cardio' && !dist && isBw({ ...c, id: ex.id })
   const perSide = isPerSide(c)
   const progressionPolicy = policyFor({ ...c, id: ex.id }, routine, mode)
   const progressionStepInvalid = !progressionStepIsValid(progressionStepOf(c, mode, ex, st.unit), progressionPolicy)
@@ -1235,6 +1242,8 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
   // Keep whatever the other mode already had (sets, weight) and fill only what is missing.
   const setMode = m => setC(x => {
     const next = { ...defaultConfig(ex.id, m), ...x, mode: m }
+    // B&S: eine Strecke braucht eine Strecke — aus Wdh/Zeit kommend gibt es noch keine.
+    if (m === 'dist' && !(next.m > 0)) next.m = distDefaults(sport).m
     return m === 'reps' && policyFor({ ...next, id: ex.id }, routine, 'reps') === 'double'
       ? { ...next, ...normalizeRepRange(next.reps, next.repsMin, isPerSide(next) ? 2 : 1) }
       : next
@@ -1279,7 +1288,15 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
     // was. Mode-independent — a heavy triple, a plank and a cardio interval all rest.
     const restSec = Math.max(0, Math.round(c.restSec) || 0)
     const withRest = restSec ? { restSec } : {}
-    if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8), ...withNote, ...withRest, ...withYt })
+    // B&S: Strecke: m Pflicht, Zielzeit und Last nur, wenn gesetzt — „6 × 800 m" ohne Zeitvorgabe
+    // ist ein vollständiger Plan, und eine 0 als Zielzeit würde als „0:00" angezeigt.
+    if (dist) {
+      const m = Math.max(1, Math.round((Number(c.m) || 0) * 10) / 10 || distDefaults(sport).m)
+      const sec = Math.max(0, Math.round(c.sec) || 0)
+      const weight = Math.max(0, c.weight || 0)
+      onSave({ sets, mode: 'dist', m, ...(sec ? { sec } : {}), ...(weight ? { weight } : {}), ...withNote, ...withRest, ...withYt })
+    }
+    else if (mode === 'cardio') onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8), ...withNote, ...withRest, ...withYt })
     else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...prog, ...withNote, ...withWarmups, ...withRest, ...withYt })
     else {
       // A unilateral target is stored even: the split has to divide, and a typed 15 would
@@ -1316,12 +1333,36 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
         .map((s, i) => <span key={i} className="tag dim">{t(s)}</span>)}
     </div>
     {ex.desc && <div className="exnote">{ex.desc}</div>}
-    {!cardio && <div style={{ marginBottom: 14 }}>
+    <div style={{ marginBottom: 14 }}>
       <Segmented className="seg-range" value={mode} onChange={setMode}
-        options={[{ value: 'reps', label: t('Reps') }, { value: 'time', label: t('Time') }]} />
-    </div>}
-    <div className="row cfgrow" style={{ marginBottom: mode === 'time' ? 8 : 18 }}>
-      {cardio ? <>
+        options={cardio
+          ? [{ value: 'dist', label: 'Strecke' }, { value: 'cardio', label: 'Dauer & Tempo' }]
+          : [{ value: 'reps', label: t('Reps') }, { value: 'time', label: t('Time') }, { value: 'dist', label: 'Strecke' }]} />
+    </div>
+    {dist && <>
+      <div className="row cfgrow" style={{ marginBottom: 8 }}>
+        <Stepper label={c.sets > 1 ? 'Intervalle' : 'Durchgänge'} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
+        <Stepper label="Strecke (m)" value={c.m} step={distStep(sport)} decimal={sport === 'carry'} onChange={v => setC(x => ({ ...x, m: v }))} />
+      </div>
+      <div className="row cfgrow" style={{ marginBottom: 8 }}>
+        <DurationStepper label="Zielzeit" value={c.sec || 0} placeholder="frei"
+          onChange={v => setC(x => ({ ...x, sec: v }))} />
+        {/* Pace und Zielzeit sind dieselbe Vorgabe — wer die Pace tippt, bekommt die Zeit
+            ausgerechnet. Gespeichert wird nur die Zeit (lib/endurance.js). */}
+        {paceUnit(sport) && <DurationStepper label={'Pace ' + paceUnit(sport)} value={paceSecOf(sport, c.m, c.sec) || 0} placeholder="frei"
+          onChange={v => setC(x => ({ ...x, sec: v > 0 ? (timeForPace(sport, x.m, v) || 0) : 0 }))} />}
+        {(sport === 'carry' || (c.weight || 0) > 0) && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight || 0} step={2.5}
+          onChange={v => setC(x => ({ ...x, weight: v }))} />}
+      </div>
+      <div className="small dim" style={{ marginBottom: 18 }}>
+        {paceLabel(sport, c.m, c.sec)
+          ? `Vorgabe: ${paceLabel(sport, c.m, c.sec)}. `
+          : ''}
+        Zielzeit leer lassen, wenn nur die Strecke zählt. Beim Training trägt das Mitglied Strecke und Zeit ein, die App rechnet die Pace.
+      </div>
+    </>}
+    {!dist && <div className="row cfgrow" style={{ marginBottom: mode === 'time' ? 8 : 18 }}>
+      {mode === 'cardio' ? <>
         <Stepper label={t('Intervals')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Minutes')} value={c.min} step={1} decimal={false} onChange={v => setC(x => ({ ...x, min: v }))} />
         <Stepper label={t('Speed (km/h)')} value={c.speed} step={0.5} onChange={v => setC(x => ({ ...x, speed: v }))} />
@@ -1339,14 +1380,14 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
             until there is a belt to describe — see the added-weight row below. */}
         {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
       </>}
-    </div>
+    </div>}
     {c.intensifier?.type === 'restpause' && <div className="small dim" style={{ marginTop: -10, marginBottom: 18 }}>
       {t('Rest-pause always trains as one warm-up set at this rep count, then one rest-pause work set — "Sets" is not used.')}
     </div>}
     {/* Planned warm-ups: the session used to start at the work weight and you added every
         warm-up by hand, every time. Rest-pause is excluded because it builds its own warm-up
         row, and cardio because an interval plan has no load to ramp. */}
-    {!cardio && c.intensifier?.type !== 'restpause' && <>
+    {(mode === 'reps' || mode === 'time') && c.intensifier?.type !== 'restpause' && <>
       <div className="row cfgrow" style={{ marginBottom: 6 }}>
         <Stepper label={t('Warm-up sets')} value={c.warmupSets || 0} step={1} decimal={false}
           onChange={v => setC(x => ({ ...x, warmupSets: Math.max(0, Math.min(MAX_PLANNED_WARMUPS, Math.round(v) || 0)) }))} />
@@ -1371,7 +1412,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
       {t('Rest after each set of this exercise. Leave at 0 to use your default rest timer.')}
     </div>
     {/* ---------- bodyweight + per side (issues #31/#32/#33) ---------- */}
-    {!cardio && <div className="sect-b" style={{ marginBottom: 8 }}>
+    {(mode === 'reps' || mode === 'time') && <div className="sect-b" style={{ marginBottom: 8 }}>
       <Row icon="figureStrength" iconTint="var(--acc)" title={t('Bodyweight')}
         subtitle={bw ? t('No weight to enter — just log the reps.') : t('Ask for a weight on every set.')}>
         <Switch checked={bw} onChange={v => setC(x => ({ ...x, bodyweight: v, weight: v ? 0 : x.weight }))} />
@@ -2202,12 +2243,15 @@ export const workoutCompleteSheet = () => ui().openSheet(close => <WorkoutComple
 
 function FinishSummary({ w, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)
+  // B&S: Eine Lauf- oder Schwimmeinheit hat kein Volumen in kg — dort zählt die Strecke.
+  const meters = (w.entries || []).reduce((sum, e) => sum + totalMeters((e.sets || []).filter(x => x.done && !isWarmupRow(x) && x.m > 0)), 0)
+  const distOnly = meters > 0 && !(w.vol > 0)
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>
     <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="trophy" /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <div className="tiles" style={{ textAlign: 'left' }}>
       <div className="tile"><div className="l">{t('Duration')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtDur(w.end - w.start)}</div></div>
-      <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit)}</div></div>
+      <div className="tile"><div className="l">{distOnly ? 'Strecke' : t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{distOnly ? fmtDist(meters) : fmtVol(w.vol, st.unit) + (meters > 0 ? ' · ' + fmtDist(meters) : '')}</div></div>
       <div className="tile"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{t('{0} sets · {1} work', setsDone(w), workSetsDone(w))}</div></div>
       <div className="tile"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{prs.length || '—'}</div></div>
     </div>

@@ -1,7 +1,8 @@
 // Focused workout semantics shared by session, history, and strength views.
 // Legacy records have no explicit phase or mode, so the defaults preserve main's work/reps shape.
 
-const MODES = ['reps', 'time', 'cardio']
+// B&S: 'dist' = Strecke + Zeit (Laufen, Schwimmen, Rad, Hyrox-Stationen), siehe lib/endurance.js.
+const MODES = ['reps', 'time', 'cardio', 'dist']
 const objectOf = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 
 function normalizedPhase(value, fallback = 'work') {
@@ -320,6 +321,8 @@ function inferredMode(source) {
   const explicit = explicitMode(value)
   if (explicit) return explicit
   if (String(value.mode || '').trim().toLowerCase() === 'amrap') return 'reps'
+  // B&S: Strecke vor Zeit — ein Distanz-Satz trägt auch `sec`, ist aber kein gehaltener Satz.
+  if (value.m != null && value.r == null) return 'dist'
   if (value.min != null || value.speed != null) return 'cardio'
   if (value.sec != null || value.seconds != null || value.durationSec != null) return 'time'
   if (value.r != null || value.reps != null || value.actualReps != null) return 'reps'
