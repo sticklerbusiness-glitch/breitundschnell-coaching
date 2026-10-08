@@ -1,11 +1,14 @@
 import { t } from './i18n.js'
-import { EXDB } from './exercises-data.js'
+// B&S: der ganze Katalog, nicht nur der Datensatz — sonst fehlen Schlitten, Fahrrad, Laufband,
+// Rudergerät und Sandsack (lib/bs-exercises.js) in der Geräteliste, und mit aktivem Geräte-Filter
+// wären Sled Push & Co. nie zu sehen.
+import { CATALOGUE } from './exercises.js'
 
 // Every equipment value present in the catalogue, most common first — this becomes the
 // checklist Settings shows when you build a profile.
 export const ALL_EQUIPMENT = (() => {
   const c = {}
-  EXDB.forEach(e => { if (e.eq) c[e.eq] = (c[e.eq] || 0) + 1 })
+  CATALOGUE.forEach(e => { if (e.eq) c[e.eq] = (c[e.eq] || 0) + 1 })
   return Object.keys(c).sort((a, b) => c[b] - c[a] || (a < b ? -1 : 1))
 })()
 

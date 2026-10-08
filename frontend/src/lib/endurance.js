@@ -47,6 +47,18 @@ export function sportOf(idOrEx) {
   return SPORT_OF[ex.id] || null
 }
 
+/**
+ * Sportart für die ANZEIGE einer Strecke. Jede Übung kann auf „Strecke" gestellt werden — auch
+ * Ausfallschritte im Gehen oder ein Bear Crawl. Ohne eigene Sportart zählt Cardio als Laufen
+ * (Pace /km), alles andere als Strecke ohne Pace. Plan-Editor und Training benutzen beide diese
+ * Funktion, damit sie nie unterschiedliche Pace-Einheiten zeigen.
+ */
+export function distSportOf(idOrEx) {
+  const own = sportOf(idOrEx)
+  if (own) return own
+  return exOf(idOrEx)?.bp === 'cardio' ? 'run' : 'carry'
+}
+
 const n = v => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
 /** „800 m", „12,5 m", „5 km", „21,1 km" — ab einem Kilometer in km, deutsches Komma. */

@@ -6,7 +6,7 @@ import { exOr } from '../lib/exercises.js'
 import { activeProfile, exAvailable } from '../lib/equipment.js'
 import { uid } from '../lib/format.js'
 import { t, exerciseNameFor } from '../lib/i18n.js'
-import { supersetUnits, unitLabels, moveSupersetUnit, cleanupSg, exLine, defaultConfig } from '../lib/history.js'
+import { supersetUnits, unitLabels, moveSupersetUnit, cleanupSg, exLine, defaultConfig, pairAdjacent } from '../lib/history.js'
 import { Thumb } from '../components/Media.jsx'
 import { glyphPicker, exercisePicker, exConfigSheet, confirmSheet, exerciseDetailSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
@@ -439,11 +439,20 @@ function RoutineEditor() {
       cleanupSg(ex)
     })
   }
+  // B&S: Der Schalter sitzt zwischen Übung i-1 und i. Verbinden hängt beide Gruppen aneinander
+  // (A + B–C → A–B–C, pairAdjacent), Lösen trennt genau an dieser Stelle (A–B–C → A | B–C):
+  // alles ab i bekommt eine eigene Gruppe. Vorher überschrieb Verbinden die Gruppe von B (C fiel
+  // heraus), und Lösen zwischen A und B ließ die ganze Dreiergruppe zerfallen.
   const toggleLink = i => edit(ex => {
-    if (i < 1) return
+    if (i < 1 || !ex[i] || !ex[i - 1]) return
     const cur = ex[i], prev = ex[i - 1]
-    if (cur.sg && prev.sg && cur.sg === prev.sg) delete cur.sg
-    else { const gid = prev.sg || ('sg' + uid()); prev.sg = gid; cur.sg = gid }
+    if (cur.sg && prev.sg && cur.sg === prev.sg) {
+      const group = cur.sg
+      const fresh = 'sg' + uid()
+      for (let k = i; k < ex.length && ex[k].sg === group; k++) ex[k].sg = fresh
+    } else {
+      ex.splice(0, ex.length, ...pairAdjacent(ex, i - 1, i, prev.sg || cur.sg || ('sg' + uid())))
+    }
     cleanupSg(ex)
   })
 

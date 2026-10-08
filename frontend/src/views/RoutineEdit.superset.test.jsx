@@ -103,6 +103,19 @@ describe('plan editor', () => {
     expect(tags()).toEqual(['A1', 'A2', 'A3'])
   })
 
+  it('splits a group of three exactly at the switch and joins a neighbour to an existing group', () => {
+    mode.editable = true
+    render([entry('c1', 'g'), entry('c2', 'g'), entry('c3', 'g'), entry('c4')])
+    expect(tags()).toEqual(['A1', 'A2', 'A3', 'B'])
+    act(() => links()[0].click())   // A | B–C, nicht alles auflösen
+    expect(tags()).toEqual(['A', 'B1', 'B2', 'C'])
+    expect(routine()[1].sg).toBe(routine()[2].sg)
+    act(() => links()[0].click())   // A wieder an B–C hängen → A–B–C
+    expect(tags()).toEqual(['A1', 'A2', 'A3', 'B'])
+    act(() => links()[2].click())   // D an A–B–C → vierer Gruppe
+    expect(new Set(routine().map(e => e.sg)).size).toBe(1)
+  })
+
   it('does not start a drag from the switch', () => {
     mode.editable = true
     render([entry('c1'), entry('c2')])

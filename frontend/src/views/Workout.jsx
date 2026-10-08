@@ -22,7 +22,7 @@ import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 // B&S: Strecken-Erfassung (Laufen, Schwimmen, Rad, Hyrox) — siehe lib/endurance.js.
 import { DurationField } from '../components/DurationField.jsx'
-import { sportOf, distStep, paceLabel, SPORTS } from '../lib/endurance.js'
+import { distSportOf, distStep, paceLabel, SPORTS } from '../lib/endurance.js'
 import { nextPrescription, applyPrescription, defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
 import { progressionGuidance } from '../lib/progression-copy.js'
 import { glyphOf } from '../lib/glyphs.js'
@@ -147,7 +147,7 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
   const timed = mode === 'time'
   // B&S: Strecke + Zeit, die Pace rechnet die App (lib/endurance.js).
   const dist = mode === 'dist'
-  const sport = dist ? sportOf(entry.id) : null
+  const sport = dist ? distSportOf(entry.id) : null
   const last = lastEntryFor(S, entry.id)
   const standingNote = exNoteFor(S, entry.id)
   // Only worth surfacing while there is still work left: once the exercise is finished, a note

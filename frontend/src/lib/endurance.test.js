@@ -1,6 +1,6 @@
 // B&S: Strecke + Zeit statt Gewicht × Wiederholungen — Laufen, Schwimmen, Rad, Hyrox.
 import { describe, expect, it } from 'vitest'
-import { fmtDist, fmtDur, parseDur, paceLabel, timeForPace, paceSecOf, sportOf, distLine, totalMeters } from './endurance.js'
+import { fmtDist, fmtDur, parseDur, paceLabel, timeForPace, paceSecOf, sportOf, distSportOf, distLine, totalMeters } from './endurance.js'
 import { EXIDX, CATALOGUE } from './exercises.js'
 import { BS_EXERCISES } from './bs-exercises.js'
 import { modeOf, defaultModeOf, defaultConfig, exLine, setLabel, buildSets, insertWarmupRow, metricModeForEntry } from './history.js'
@@ -79,6 +79,12 @@ describe('catalogue', () => {
     expect(sportOf('0025')).toBeNull()        // Bankdrücken
     expect(sportOf('bs-wall-balls')).toBeNull()
   })
+
+  it('shows any exercise switched to distance the same way in editor and workout', () => {
+    expect(distSportOf('1460')).toBe('carry')   // Ausfallschritt im Gehen: Strecke ohne Pace
+    expect(distSportOf('3360')).toBe('run')     // Bear Crawl (Cardio): wie Laufen
+    expect(setLabel('1460', { m: 50, sec: 60 })).toBe('50 m · 1:00')
+  })
 })
 
 describe('dist mode in plans and workouts', () => {
@@ -103,6 +109,11 @@ describe('dist mode in plans and workouts', () => {
     expect(rows).toEqual([{ m: 800, sec: 190, done: false }, { m: 800, sec: 190, done: false }, { m: 800, sec: 190, done: false }])
     const sled = buildSets({ workouts: [], exWeights: {} }, { id: 'bs-sled-push', mode: 'dist', sets: 1, m: 50, weight: 152 })
     expect(sled).toEqual([{ m: 50, sec: 0, w: 152, done: false }])
+  })
+
+  it('keeps an old cardio routine filled even when the last run was logged as distance', () => {
+    const S = { workouts: [{ d: '2026-10-07', entries: [{ id: '0685', target: { mode: 'dist', m: 5000 }, sets: [{ m: 5000, sec: 1500, done: true }] }] }], exWeights: {} }
+    expect(buildSets(S, { id: '0685', sets: 1, min: 30, speed: 10 })).toEqual([{ min: 30, speed: 10, done: false }])
   })
 
   it('adds a warm-up as the same distance with an open time', () => {

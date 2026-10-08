@@ -1,7 +1,7 @@
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { todayISO, isoOf, weekKey, weekStartOf, fmtNum } from './format.js'
 import { isCardio, isBodyweightEq, EXIDX } from './exercises.js'
-import { sportOf, distDefaults, distLine } from './endurance.js'
+import { sportOf, distSportOf, distDefaults, distLine } from './endurance.js'
 import { phaseForSet, modeForSet, modeForEntry, isWarmupRow, normalizeMode, completedVolumeOf, nextDropWeight, splitBurstReps, makeSideSet, isSideSet, syncSideAggregate } from './workout-model.js'
 const objectOf = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 // Completed-state-independent work rows whose authoritative mode matches the requested mode.
@@ -124,7 +124,7 @@ export function setLabel(id, s, cfg) {
   // A set saved by an older build carries no target with it; the set's own fields still say what
   // it was — seconds for a timed set, minutes for cardio — so those are not read back as "0 reps".
   if (!cfg && !(s.r > 0)) { if (s.m > 0) mode = 'dist'; else if (s.min > 0 || s.speed > 0) mode = 'cardio'; else if (s.sec > 0) mode = 'time' }
-  if (mode === 'dist') return distLine(s, sportOf(c.id ?? id))
+  if (mode === 'dist') return distLine(s, distSportOf(c.id ?? id))
   if (mode === 'cardio') return `${s.min || 0} min @ ${fmtNum(s.speed || 0)} km/h`
   if (mode === 'time') return fmtSec(s.sec) + (s.w > 0 ? ` · ${fmtNum(s.w)}` : '')
   const bw = isBw({ ...c, id: c.id ?? id })
@@ -150,7 +150,7 @@ export function setLabel(id, s, cfg) {
 // Default config for a freshly added exercise.
 export function defaultConfig(id, mode) {
   const m = mode || defaultModeOf(id)
-  if (m === 'dist') return { mode: 'dist', ...distDefaults(sportOf(id)) }
+  if (m === 'dist') return { mode: 'dist', ...distDefaults(distSportOf(id)) }
   if (m === 'cardio') return { sets: 1, min: 20, speed: 8 }
   // Written only when it is true, so a barbell config is byte-for-byte what it was before
   // the flag existed and a plan file gains nothing it does not need.
@@ -168,7 +168,7 @@ export function exLine(cfg, unit) {
   if (mode === 'cardio') return `${n} × ${cfg.min || 20} min @ ${fmtNum(cfg.speed || 8)} km/h`
   // B&S: „6 × 800 m · 3:10 · 3:58 /km", ein einzelner Lauf ohne „1 ×": „10 km · 55:00 · 5:30 /km".
   if (mode === 'dist') {
-    const line = distLine({ m: cfg.m, sec: cfg.sec, w: cfg.weight }, sportOf(cfg.id), unit)
+    const line = distLine({ m: cfg.m, sec: cfg.sec, w: cfg.weight }, distSportOf(cfg.id), unit)
     return n > 1 ? `${n} × ${line}` : line
   }
   if (mode === 'time') return `${n} × ${fmtSec(cfg.sec || 45)}${load}`
@@ -408,8 +408,11 @@ function buildWorkSets(S, cfg, options = {}) {
 
   if (mode === 'cardio') {
     for (let i = 0; i < n; i++) {
+      // B&S: Nur von einem Cardio-Satz übernehmen. Seit Laufen neu als Strecke startet, kann das
+      // letzte Mal ein {m, sec}-Satz sein — dann stünden hier leere Felder statt Minuten/Tempo.
       const prev = prevAt(i)
-      sets.push({ min: prev ? prev.min : (cfg.min || 20), speed: prev ? prev.speed : (cfg.speed || 8), done: false })
+      const carried = prev && (prev.min > 0 || prev.speed > 0) ? prev : null
+      sets.push({ min: carried ? carried.min : (cfg.min || 20), speed: carried ? carried.speed : (cfg.speed || 8), done: false })
     }
     return sets
   }
@@ -420,7 +423,7 @@ function buildWorkSets(S, cfg, options = {}) {
     for (let i = 0; i < n; i++) {
       const prev = prevAt(i)
       const carried = prev && prev.m > 0 ? prev : null
-      const m = cfg.m > 0 ? cfg.m : (carried ? carried.m : distDefaults(sportOf(cfg.id)).m)
+      const m = cfg.m > 0 ? cfg.m : (carried ? carried.m : distDefaults(distSportOf(cfg.id)).m)
       const w = cfg.weight > 0 ? cfg.weight : (carried && carried.w > 0 ? carried.w : 0)
       sets.push({ m, sec: cfg.sec > 0 ? cfg.sec : 0, ...(w > 0 ? { w } : {}), done: false })
     }

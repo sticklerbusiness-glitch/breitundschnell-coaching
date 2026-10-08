@@ -16,7 +16,7 @@ import LineChart from './components/LineChart.jsx'
 import Stepper from './components/Stepper.jsx'
 // B&S: Strecken-Erfassung (Laufen, Schwimmen, Rad, Hyrox).
 import { DurationStepper } from './components/DurationField.jsx'
-import { sportOf, distStep, distDefaults, paceLabel, paceSecOf, paceUnit, timeForPace, totalMeters, fmtDist } from './lib/endurance.js'
+import { sportOf, distSportOf, distStep, distDefaults, paceLabel, paceSecOf, paceUnit, timeForPace, totalMeters, fmtDist } from './lib/endurance.js'
 import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row, TextField, NumberField, MultiSelectRow } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
@@ -1231,7 +1231,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, initial }) {
   // bei allen anderen neben Wdh und Zeit (Sled Push, Farmer's Carry, Ausfallschritte im Gehen).
   const mode = modeOf({ ...c, id: ex.id })
   const dist = mode === 'dist'
-  const sport = sportOf(ex) || (cardio ? 'run' : 'carry')
+  const sport = distSportOf(ex)
   // Both default from the dataset and are then whatever the config says — see isBw.
   const bw = mode !== 'cardio' && !dist && isBw({ ...c, id: ex.id })
   const perSide = isPerSide(c)

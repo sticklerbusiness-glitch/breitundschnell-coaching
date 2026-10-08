@@ -1,9 +1,11 @@
 // B&S: Eingabe für Zeiten im Format m:ss bzw. h:mm:ss — für die Strecken-Erfassung (Laufen,
 // Schwimmen, Rad). Der Wert ist immer in Sekunden; 0 heißt „keine Zeit" und zeigt ein leeres Feld.
 //
-// Getippt wird frei („3:10", „3,10", „1:02:30", „45" = 45 Minuten — siehe parseDur), übernommen
-// beim Verlassen des Felds oder mit Enter. Was keine Zeit ist, wird verworfen und das Feld zeigt
-// wieder den letzten gültigen Wert — eine halbe Eingabe darf nie als 0:00 gespeichert werden.
+// Getippt wird frei („3:10", „3,10", „1:02:30", „45" = 45 Minuten — siehe parseDur). Jede
+// Eingabe, die schon eine Zeit IST, wird sofort gespeichert — wie bei den Zahlenfeldern. Nur beim
+// Verlassen zu speichern verlor die Zeit, wenn man direkt danach „Beenden" tippte (WebKit lässt
+// das Feld dabei fokussiert, es kommt nie ein blur). Was keine Zeit ist, wird nicht gespeichert;
+// beim Verlassen zeigt das Feld wieder den letzten gültigen Wert.
 import { useState } from 'react'
 import { fmtDur, parseDur } from '../lib/endurance.js'
 import Icon from './Icon.jsx'
@@ -28,7 +30,12 @@ export function DurationField({ value, onChange, placeholder = 'm:ss', className
       value={shown}
       placeholder={placeholder}
       onFocus={e => e.target.select()}
-      onChange={e => setDraft(e.target.value)}
+      onChange={e => {
+        const text = e.target.value
+        setDraft(text)
+        const sec = parseDur(text)
+        if (sec != null && sec !== value) onChange(sec)
+      }}
       onBlur={commit}
       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
       {...rest}
