@@ -128,9 +128,11 @@ function Shell() {
               <Route path="/plan/r/:id" element={<RoutineEdit />} />
               <Route path="/workout" element={<Workout />} />
               <Route path="/stats" element={<Stats />} />
-              {/* B&S: Kalorien gehören dem Mitglied, nicht dem Plan. Im Editor sieht ein Coach
-                  den Stand eines Mitglieds an und darf dort nichts eintragen — wie bei den
-                  Einstellungen führt die Route deshalb zurück auf den Plan. */}
+              {/* B&S: Kalorien gehören dem Mitglied, nicht dem Plan — Einträge wie Tagesziel.
+                  Im Editor sieht ein Coach den Stand eines Mitglieds an und darf dort nichts
+                  eintragen und kein Ziel setzen; die Ansicht schriebe ohnehin auf SEIN Konto
+                  (Sitzungs-Cookie), nicht auf das des Mitglieds. Wie bei den Einstellungen führt
+                  die Route deshalb zurück auf den Plan. */}
               <Route path="/kalorien" element={editor ? <Navigate to="/plan" replace /> : <Kalorien />} />
               {/* B&S: Der Accountability-Check — ein Foto nach dem Training. Der Bindestrich
                   im Pfad hält ihn von openGyms Studio-Check-in auseinander (Mitgliedskarte,

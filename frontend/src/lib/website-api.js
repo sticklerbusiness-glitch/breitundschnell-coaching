@@ -54,6 +54,22 @@ export const kalorienSpeichern = eintrag =>
 export const kalorienLoeschen = tag =>
   website(`api/kalorien?datum=${encodeURIComponent(tag)}`, { method: 'DELETE' })
 
+/**
+ * Setzt das eigene Tagesziel — `null` (oder leer) löscht es.
+ *
+ * B&S: Das Ziel legt das Mitglied SELBST fest, nicht der Coach. Individuelle
+ * Ernährungsberatung (Kalorien/Makros für eine Person festlegen) ist in Österreich ein
+ * reglementiertes Gewerbe; die Coaches sehen das Ziel, setzen es aber nicht. Deshalb
+ * gibt es hier auch keine userId: Der Server schreibt immer auf die Person hinter dem
+ * Sitzungs-Cookie. Geprüft wird nur dort (500–10.000 kcal, Komma erlaubt) — der Fehlertext
+ * kommt als WebsiteFehler zurück.
+ *
+ * @param {number|string|null} ziel
+ * @returns {Promise<{ok: true, ziel: number|null}>}
+ */
+export const kalorienZielSpeichern = ziel =>
+  website('api/kalorien', { method: 'PATCH', body: JSON.stringify({ ziel }) })
+
 /* ---- Check-in-Fotos ---- */
 
 /** @returns {Promise<{checkins: Array<{id,createdAt,bildPfad,kommentar}>}>} */

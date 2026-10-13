@@ -173,8 +173,11 @@ export default function Home() {
         : t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>}
     </div>
 
-    {/* B&S: Kalorien — im Plan-Editor nicht: dort schaut ein Coach auf den Stand eines
-        Mitglieds, und dessen Ernährung trägt er nicht ein. */}
+    {/* B&S: Kalorien und Check-in — im Plan-Editor nicht. Dort schaut ein Coach auf den Plan
+        eines Mitglieds, die Kacheln aber fragen die Website mit SEINEM Sitzungs-Cookie und
+        zeigten seine eigenen Zahlen unter dem Namen des Mitglieds. Und inhaltlich gehören
+        Einträge und Kalorienziel dem Mitglied: Der Coach sieht sie im Admin, trägt aber nichts
+        ein und legt kein Ziel fest (das wäre Ernährungsberatung, siehe views/Kalorien.jsx). */}
     {!imEditor && <KalorienKachel />}
     {!imEditor && <CheckInKachel />}
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { Button, NumberField, TextField } from '../components/ui.jsx'
 import { useUI } from '../store/useUI.js'
-import { kalorienLaden, kalorienLoeschen, kalorienSpeichern } from '../lib/website-api.js'
+import { kalorienLaden, kalorienLoeschen, kalorienSpeichern, kalorienZielSpeichern } from '../lib/website-api.js'
 
 /* B&S: Kalorien — bis zum 03.10.2026 eine Seite im Mitgliederbereich der Website.
  *
@@ -15,7 +15,29 @@ import { kalorienLaden, kalorienLoeschen, kalorienSpeichern } from '../lib/websi
  * diese App offline mitführt. Zwei Synchronisierungswege mit zwei Konfliktregeln wären
  * mehr Gelegenheit zum Datenverlust, als ein Keller ohne Empfang wert ist — der Plan
  * und das laufende Training funktionieren offline weiter, das Eintragen wartet.
+ *
+ * Das Tagesziel setzt das Mitglied hier SELBST (Coaches für ihr eigenes Konto genauso).
+ * Bis Oktober 2026 stand an seiner Stelle „kommt vom Coach" — das darf es nicht mehr:
+ * Kalorien oder Makros für eine einzelne Person festzulegen ist in Österreich
+ * Ernährungsberatung, ein reglementiertes Gewerbe (§ 119 GewO), und die Coaches sind
+ * Fitnesstrainer. Erlaubt ist, dass das Mitglied trackt und sich sein Ziel selbst gibt; die
+ * Coaches sehen beides und halten es dran. Deshalb schlägt diese Ansicht auch keine Zahl
+ * vor — kein Platzhalterwert, keine Empfehlung —, sondern verweist auf einen Rechner.
  */
+
+/* B&S: Was im Ziel-Feld steht, so weit aufbereitet, wie es ohne Raten geht. Die eine Regel
+ * (500–10.000 kcal, Komma erlaubt) steht auf der Website (pruefeKalorienZiel) und antwortet
+ * mit eigenem Fehlertext. Hier nur, was sie nicht wissen kann: „2.800" ist auf einem
+ * deutschen Handy zweitausendachthundert und nicht 2,8 — ein Punkt vor genau drei Ziffern
+ * ist ein Tausenderpunkt. Was keine saubere Zahl ist, geht roh hinüber, damit der Server
+ * es mit seinem Text ablehnt, statt dass hier eine zweite Fassung der Regel entsteht.
+ */
+function zielAusEingabe(text) {
+  const s = String(text ?? '').replace(/\s+/g, '')
+  if (s === '') return null
+  const ohneTausender = /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s
+  return /^\d+([.,]\d+)?$/.test(ohneTausender) ? Number(ohneTausender.replace(',', '.')) : ohneTausender
+}
 
 const heuteText = tag => {
   const [j, m, d] = tag.split('-')
@@ -31,6 +53,12 @@ export default function Kalorien() {
   const [eingabe, setEingabe] = useState({ kcal: null, protein: null, carbs: null, fett: null, notiz: '' })
   const [speichert, setSpeichert] = useState(false)
   const [fehler, setFehler] = useState(null)
+  // Das Ziel-Feld: zu, bis jemand auf die Ziel-Kachel tippt — das Ziel ändert man selten,
+  // ein dauernd offenes Feld stünde dem täglichen Eintragen nur im Weg.
+  const [zielOffen, setZielOffen] = useState(false)
+  const [zielText, setZielText] = useState('')
+  const [zielSpeichert, setZielSpeichert] = useState(false)
+  const [zielFehler, setZielFehler] = useState(null)
 
   const laden = useCallback(async () => {
     try {
@@ -82,6 +110,37 @@ export default function Kalorien() {
     }
   }
 
+  const zielBearbeiten = () => {
+    setZielText(lage.ziel ? String(lage.ziel) : '')
+    setZielFehler(null)
+    setZielOffen(true)
+  }
+
+  // `roh` ist null für „Ziel entfernen"; sonst der aufbereitete Feldinhalt.
+  const zielSetzen = async roh => {
+    setZielSpeichert(true)
+    setZielFehler(null)
+    try {
+      const antwort = await kalorienZielSpeichern(roh)
+      setLage(l => ({ ...l, ziel: antwort.ziel ?? null }))
+      setZielOffen(false)
+      toast(antwort.ziel ? 'Ziel gespeichert.' : 'Ziel entfernt.')
+    } catch (e) {
+      setZielFehler(e.status ? e.message : 'Keine Verbindung — das Ziel ist nicht gespeichert.')
+    } finally {
+      setZielSpeichert(false)
+    }
+  }
+
+  const zielSpeichern = ereignis => {
+    ereignis.preventDefault()
+    const roh = zielAusEingabe(zielText)
+    // Leeres Feld mit bestehendem Ziel heißt „weg damit" (wie beim Server); ohne Ziel gäbe
+    // es nichts zu entfernen, und ein „Ziel entfernt." wäre nur verwirrend.
+    if (roh === null && !lage.ziel) { setZielFehler('Trag zuerst dein Tagesziel ein.'); return }
+    zielSetzen(roh)
+  }
+
   const loeschen = async tag => {
     try {
       await kalorienLoeschen(tag)
@@ -131,15 +190,27 @@ export default function Kalorien() {
               <span className="muted" style={{ fontSize: 15, fontWeight: 400 }}> kcal</span>
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div className="muted small">{lage.ziel ? 'Dein Ziel' : 'Ziel'}</div>
-            <div style={{ fontSize: 17 }}>{lage.ziel ? `${lage.ziel} kcal` : <span className="muted">kommt vom Coach</span>}</div>
+          {/* B&S: Die Ziel-Kachel ist der Knopf zum Setzen und Ändern — kein eigener Menüpunkt
+              für etwas, das man selten anfasst. */}
+          <button type="button" onClick={zielBearbeiten} aria-expanded={zielOffen}
+            aria-label={lage.ziel
+              // B&S: Das aria-label ersetzt den Inhalt des Knopfs für Screenreader —
+              // deshalb muss die Abweichung („120 unter Ziel“) mit hinein, sonst geht sie verloren.
+              ? `Dein Ziel: ${lage.ziel} kcal${diff != null ? (diff <= 0 ? `, ${Math.abs(diff)} unter Ziel` : `, ${diff} über Ziel`) : ''} — ändern`
+              : undefined}
+            style={{ textAlign: 'right', padding: '4px 0 4px 12px' }}>
+            <span className="muted small" style={{ display: 'block' }}>{lage.ziel ? 'Dein Ziel' : 'Tagesziel'}</span>
+            <span style={{ display: 'block', fontSize: 17 }}>
+              {lage.ziel
+                ? <>{lage.ziel} kcal <Icon name="pencil" className="muted" style={{ fontSize: 13 }} /></>
+                : <span className="accent">Ziel festlegen</span>}
+            </span>
             {diff != null && (
-              <div className="small" style={{ color: diff <= 0 ? 'var(--green)' : 'var(--orange)' }}>
+              <span className="small" style={{ display: 'block', color: diff <= 0 ? 'var(--green)' : 'var(--orange)' }}>
                 {diff <= 0 ? `${Math.abs(diff)} unter Ziel` : `${diff} über Ziel`}
-              </div>
+              </span>
             )}
-          </div>
+          </button>
         </div>
         {schnitt != null && (
           <div className="item" style={{ justifyContent: 'space-between' }}>
@@ -150,6 +221,37 @@ export default function Kalorien() {
           </div>
         )}
       </div>
+
+      {zielOffen && (
+        <form onSubmit={zielSpeichern} style={{ marginBottom: 18 }}>
+          <div className="list" style={{ marginBottom: 8 }}>
+            <label className="item" style={{ justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ flex: 'none' }}>Tagesziel (kcal)</span>
+              {/* Bewusst kein NumberField: das schneidet „2.800" am Punkt ab und macht 2 daraus. */}
+              <TextField value={zielText} inputMode="numeric" autoComplete="off" autoFocus
+                aria-label="Tagesziel in kcal" style={{ maxWidth: 130, textAlign: 'right' }}
+                onChange={e => setZielText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') setZielOffen(false) }} />
+            </label>
+          </div>
+          <div className="muted small" style={{ marginBottom: 10 }}>
+            Dein Ziel legst du selbst fest — zum Beispiel mit einem Online-Kalorienrechner.
+            Dein Coach sieht es und hilft dir, dranzubleiben.
+          </div>
+          {zielFehler && <div className="small" style={{ color: 'var(--red)', marginBottom: 8 }}>{zielFehler}</div>}
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <Button type="submit" variant="primary" size="sm" disabled={zielSpeichert}>
+              {zielSpeichert ? 'Wird gespeichert …' : 'Speichern'}
+            </Button>
+            <Button type="button" size="sm" disabled={zielSpeichert} onClick={() => setZielOffen(false)}>Abbrechen</Button>
+            {lage.ziel && (
+              <Button type="button" variant="danger" size="sm" disabled={zielSpeichert} onClick={() => zielSetzen(null)}>
+                Ziel entfernen
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
 
       <h3 style={{ marginBottom: 8 }}>{heutigerEintrag ? 'Heute aktualisieren' : 'Für heute eintragen'}</h3>
       <div className="muted small" style={{ marginBottom: 10 }}>
@@ -208,7 +310,7 @@ export default function Kalorien() {
       )}
 
       <div className="dim small" style={{ textAlign: 'center', marginTop: 14 }}>
-        Dein Coach sieht deine Einträge und den Wochenschnitt.
+        Dein Coach sieht deine Einträge, dein Ziel und den Wochenschnitt.
       </div>
     </>}
   </>
