@@ -113,11 +113,13 @@ describe('matchExercise', () => {
   })
 
   it('rebuilds the cached haystack when the language changes', () => {
-    _setLangState('de', {}, null, { '0025': 'Bankdrücken (Langhantel)' })
-    expect(matchExercise(benchPress, 'bankdrücken')).toBe(true)
+    // B&S: ein Fantasiename ohne Synonym — „bankdrücken" fände die Übung seit dem
+    // Synonym-Wörterbuch (lib/search-synonyms.js) zu Recht auch in der englischen Ansicht.
+    _setLangState('de', {}, null, { '0025': 'Quaxdrücken (Langhantel)' })
+    expect(matchExercise(benchPress, 'quaxdrücken')).toBe(true)
 
     _setLangState('en', null, null, null)
-    expect(matchExercise(benchPress, 'bankdrücken')).toBe(false)
+    expect(matchExercise(benchPress, 'quaxdrücken')).toBe(false)
     expect(matchExercise(benchPress, 'bench')).toBe(true)
   })
 })

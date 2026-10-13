@@ -20,6 +20,7 @@
 // vor die Langhantel-Kniebeuge gestellt.
 
 import { exerciseNameFor, getVersion } from './i18n-core.js'
+import { suchBegriffe, suchText, trifft } from './search-synonyms.js'
 
 // Reihenfolge = Beliebtheit. Bewusst quer über alle Körperteile gemischt: Der Filter „Alle"
 // zeigt genau diese Reihenfolge, die Körperteil-Filter jeweils ihren Ausschnitt davon.
@@ -222,7 +223,6 @@ export function popularityRank(ex) {
 }
 
 const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-const wordsOf = s => s.split(/[^a-z0-9äöüß]+/).filter(Boolean)
 
 // Namen werden pro Übung einmal gefaltet; der Schlüssel ist die i18n-Version, damit ein
 // Sprachwechsel die übersetzten Namen neu einliest (wie corpusOf in exercises.js).
@@ -230,10 +230,11 @@ const nameCache = new WeakMap()
 function namesOf(ex) {
   const v = getVersion()
   const hit = nameCache.get(ex)
-  if (hit && hit.v === v) return hit.names
-  const names = [...new Set([fold(exerciseNameFor(ex)), fold(ex.n)].filter(Boolean))]
-  nameCache.set(ex, { v, names })
-  return names
+  if (hit && hit.v === v) return hit
+  const names = [...new Set([fold(exerciseNameFor(ex)), fold(ex.n), ...(Array.isArray(ex.aliases) ? ex.aliases.map(fold) : [])].filter(Boolean))]
+  const entry = { v, names, text: suchText(names.join(' | ')) }
+  nameCache.set(ex, entry)
+  return entry
 }
 
 /**
@@ -243,13 +244,12 @@ function namesOf(ex) {
 export function nameMatchTier(ex, query) {
   const q = fold(query)
   if (!q || !ex) return 0
-  const tokens = wordsOf(q)
-  let best = 2
-  for (const name of namesOf(ex)) {
-    if (name === q) return 0
-    if (name.includes(q) || (tokens.length && tokens.every(tok => name.includes(tok)))) best = 1
-  }
-  return best
+  const { names, text } = namesOf(ex)
+  if (names.includes(q)) return 0
+  // B&S: „steht im Namen" gilt auch über Synonyme — „KH Bankdrücken" trifft den Namen
+  // „Bankdrücken (Kurzhantel)", „pullup" den „Klimmzug".
+  const begriffe = suchBegriffe(query)
+  return begriffe.length && begriffe.every(b => trifft(b, text)) ? 1 : 2
 }
 
 /**

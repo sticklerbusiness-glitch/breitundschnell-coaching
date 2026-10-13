@@ -3,6 +3,8 @@ import { USER_EXERCISE_MUSCLE_OVERRIDES, exerciseMuscleMetadataFor } from './exe
 import { t, getVersion, exerciseNameSearchText } from './i18n-core.js'
 // B&S: Ausdauer, Hyrox und fehlende Klassiker — siehe lib/bs-exercises.js.
 import { BS_EXERCISES } from './bs-exercises.js'
+// B&S: Suche über Synonyme, Abkürzungen und Schreibvarianten — siehe lib/search-synonyms.js.
+import { suchBegriffe, suchText, trifft } from './search-synonyms.js'
 
 export { EXDB }
 
@@ -181,8 +183,10 @@ function corpusOf(e) {
   const hit = corpusCache.get(e)
   if (hit && hit.v === v) return hit.s
   const sm = Array.isArray(e?.sm) ? e.sm : []
-  const s = normalizeStr([
+  const s = suchText([
     exerciseNameSearchText(e),
+    // B&S: weitere Namen der Übung (englisch, Szene-Begriffe), z. B. bei lib/bs-exercises.js
+    ...(Array.isArray(e?.aliases) ? e.aliases : []),
     e?.tg || '', t(e?.tg || ''),
     e?.eq || '', t(e?.eq || ''),
     e?.bp || '', t(e?.bp || ''),
@@ -195,9 +199,11 @@ function corpusOf(e) {
 
 export function matchExercise(e, query) {
   if (!query) return true
-  const tokens = normalizeStr(query).split(/\s+/).filter(Boolean)
-  if (!tokens.length) return true
+  // B&S: jedes Wort muss treffen — als getipptes Wort irgendwo im Text oder über eines seiner
+  // Synonyme am Wortanfang („KH" → Kurzhantel/Dumbbell, „pullup" → Klimmzug/Pull-up).
+  const begriffe = suchBegriffe(query)
+  if (!begriffe.length) return true
   if (!e || typeof e !== 'object') return false
   const corpus = corpusOf(e)
-  return tokens.every(tok => corpus.includes(tok))
+  return begriffe.every(b => trifft(b, corpus))
 }
